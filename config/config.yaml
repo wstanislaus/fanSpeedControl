@@ -1,0 +1,245 @@
+# Global Configuration
+
+
+# RPC Server Configuration
+RPCServers:
+  MCUSimulator:
+    Port: 50051
+    MaxConnections: 10
+  FanControlSystem:
+    Port: 50052
+    MaxConnections: 10
+  CLI:
+    Port: 50053
+    MaxConnections: 5
+
+# MQTT Settings
+MQTTSettings:
+  Broker: localhost
+  Port: 1883
+  KeepAlive: 60
+  QoS: 0
+  Retain: false
+
+# Temperature Monitoring Settings
+TemperatureSettings:
+  BadThreshold: 10.0  # Temperature below this is considered bad
+  ErraticThreshold: 5.0  # Standard deviation threshold for erratic readings
+  PublishIntervals:
+    - Range: [0, 25]  # 0-25C
+      Interval: 10    # 10 seconds
+    - Range: [25, 40] # 25-40C
+      Interval: 7     # 7 seconds
+    - Range: [40, 50] # 40-50C
+      Interval: 5     # 5 seconds
+    - Range: [50, 60] # 50-60C
+      Interval: 3     # 3 seconds
+    - Range: [60, 70] # 60-70C
+      Interval: 2     # 2 seconds
+    - Range: [70, 999] # >70C
+      Interval: 1     # 1 second
+
+# Global MCU Simulator Configuration
+SimulatorStartTemp: 25.0
+SimulatorEndTemp: 80.0
+SimulatorTempStepSize: 0.3
+
+MaxMCUsSupported: 10
+MaxTempSensorsPerMCU: 4
+# Current Simulation Settings
+MCUs:
+    MCU001:
+        NumberOfSensors: 3
+        Sensors:
+            Sensor1:
+                Interface: I2C
+                Address: 0x4A
+            Sensor2:
+                Interface: I2C
+                Address: 0x5C
+            Sensor3:
+                Interface: SPI
+                CSLine: 0
+
+    MCU002:
+        NumberOfSensors: 2
+        Sensors:
+            Sensor1:
+                Interface: I2C
+                Address: 0x4B
+            Sensor2:
+                Interface: I2C
+                Address: 0x5A
+
+    MCU003:
+        NumberOfSensors: 1
+        Sensors:
+            Sensor1:
+                Interface: I2C
+                Address: 0x44
+
+# Fan Controller Configuration
+MaxFanControllers: 10
+# Raise an alarm after 30 mins of continous noise above 50 dB.
+FansTooLoudAlarm: 1
+FanModels:
+  F4ModelOUT: # 4 fan model
+    NumberOfFans: 4
+    PWMRange:
+      Min: 100
+      Max: 2000
+    DutyCycleRange:
+      Min: 10
+      Max: 100
+    Interface: I2C
+    PWM_REG: 0x10
+    NoiseProfile:
+      - DutyCycle: 10
+        NoiseLevel_dB: 25
+      - DutyCycle: 25
+        NoiseLevel_dB: 32
+      - DutyCycle: 50
+        NoiseLevel_dB: 43
+      - DutyCycle: 75
+        NoiseLevel_dB: 57
+      - DutyCycle: 100
+        NoiseLevel_dB: 65
+
+  F4ModelIN:
+    NumberOfFans: 4
+    PWMRange:
+      Min: 0
+      Max: 1000
+    DutyCycleRange:
+      Min: 0
+      Max: 100
+    Interface: I2C
+    PWM_REG: 0x10
+    NoiseProfile:
+      - DutyCycle: 0
+        NoiseLevel_dB: 20
+      - DutyCycle: 25
+        NoiseLevel_dB: 28
+      - DutyCycle: 50
+        NoiseLevel_dB: 35
+      - DutyCycle: 75
+        NoiseLevel_dB: 42
+      - DutyCycle: 100
+        NoiseLevel_dB: 48
+
+  F2ModelIN:
+    NumberOfFans: 2
+    PWMRange:
+      Min: 0
+      Max: 1000
+    DutyCycleRange:
+      Min: 0
+      Max: 100
+    Interface: I2C
+    PWM_REG: 0x1A
+    NoiseProfile:
+      - DutyCycle: 0
+        NoiseLevel_dB: 20
+      - DutyCycle: 25
+        NoiseLevel_dB: 28
+      - DutyCycle: 50
+        NoiseLevel_dB: 35
+      - DutyCycle: 75
+        NoiseLevel_dB: 42
+      - DutyCycle: 100
+        NoiseLevel_dB: 48
+
+# Current Simulation Settings
+FanControllers:
+  Fan001:
+    Model: F4ModelOUT
+    Mode: Manual
+    SetDutyCyclePercent: 10
+    I2CAddress: 0x4A
+  Fan002:
+    Model: F4ModelIN
+    Mode: Manual
+    SetDutyCyclePercent: 5
+    I2CAddress: 0x4C
+  Fan003:
+    Model: F2ModelIN
+    Mode: Manual
+    SetDutyCyclePercent: 5
+    I2CAddress: 0x50
+  Fan004:
+    Model: F2ModelIN
+    Mode: Manual
+    SetDutyCyclePercent: 5
+    I2CAddress: 0x55
+
+# Temperature Monitoring Configuration
+TemperatureHistoryDurationMinutes: 10
+TemperatureMonitor:
+  MinTemp: 25.0
+  MaxTemp: 75.0
+  MinDutyCycle: 20
+  MaxDutyCycle: 100
+  UpdateIntervalMs: 2000
+
+# Logging Configuration
+Logging:
+  Level: INFO
+  FilePath: "/var/log/fan_control_system"
+  FileName: "fan_control_system.log"
+  MaxFileSizeMB: 10
+  MaxFiles: 5
+
+AppLogLevel:
+  MCUSimulator: INFO
+  FanControlSystem:
+    FanSimulator: INFO
+    TempMonitor: INFO
+    AlarmManager: INFO
+    LogManager: INFO
+
+# Alarm Configuration
+Alarms:
+  Alarm001:
+    Severity: ERROR
+    Description: "Temperature is too low"
+    Enabled: true
+    Actions:
+      - "SendEmail"
+  Alarm002:
+    Severity: ERROR
+    Description: "Temperature is too high"
+    Enabled: true
+    Actions:
+      - "SendEmail"
+  Alarm003:
+    Severity: CRITICAL
+    Description: "Temperature is too high for more than an hour"
+    Enabled: true
+    Actions:
+      - "SendEmail"
+      - "Shutdown"
+  Alarm004:
+    Severity: CRITICAL
+    Description: "MCU has more than half of its sensors bad"
+    Enabled: true
+    Actions:
+      - "SendEmail"
+      - "Shutdown"
+  Alarm005:
+    Severity: ERROR
+    Description: "Fan is not working"
+    Enabled: true
+    Actions:
+      - "SendEmail"
+  Alarm006:
+    Severity: CRITICAL
+    Description: "Most of the fans are not working"
+    Enabled: true
+    Actions:
+      - "SendEmail"
+      - "Shutdown"
+
+AlarmTriggers:
+  CriticalTemp: 80.0
+  SensorFailureThreshold: 3
+  FanFailureThreshold: 2 

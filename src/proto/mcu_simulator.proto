@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package mcu_simulator;
+
+// Service definition for MCU Simulator
+service MCUSimulatorService {
+  // Get current temperature for a specific MCU and sensor
+  rpc GetTemperature (TemperatureRequest) returns (TemperatureResponse) {}
+  
+  // Get status of all MCUs
+  rpc GetMCUStatus (StatusRequest) returns (StatusResponse) {}
+  
+  // Control simulation parameters
+  rpc SetSimulationParams (SimulationParams) returns (SimulationResponse) {}
+}
+
+// Request message for getting temperature
+message TemperatureRequest {
+  string mcu_id = 1;
+  string sensor_id = 2;
+}
+
+// Response message containing temperature data
+message TemperatureResponse {
+  double temperature = 1;
+  bool is_valid = 2;
+  string error_message = 3;
+}
+
+// Request message for getting MCU status
+message StatusRequest {
+  string mcu_id = 1;  // Optional, if empty returns status of all MCUs
+}
+
+// Response message containing MCU status
+message StatusResponse {
+  repeated MCUStatus mcu_status = 1;
+}
+
+message MCUStatus {
+  string mcu_id = 1;
+  bool is_online = 2;
+  int32 active_sensors = 3;
+  repeated SensorStatus sensors = 4;
+}
+
+message SensorStatus {
+  string sensor_id = 1;
+  bool is_active = 2;
+  string interface = 3;
+  string address = 4;
+}
+
+// Message for setting simulation parameters
+message SimulationParams {
+  double start_temp = 1;
+  double end_temp = 2;
+  double step_size = 3;
+}
+
+// Response for simulation parameter changes
+message SimulationResponse {
+  bool success = 1;
+  string message = 2;
+} 

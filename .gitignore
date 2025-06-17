@@ -1,0 +1,13 @@
+# Build directories
+build/
+
+# IDE files
+.vscode/
+.idea/
+.cursor/
+
+# Python Virtual Environment
+venv/
+
+# log files
+*.log
