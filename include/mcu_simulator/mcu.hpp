@@ -93,16 +93,18 @@ public:
     /**
      * @brief Makes a specific sensor report bad readings (for testing)
      * @param sensor_id ID of the sensor to make bad
+     * @param is_bad true to set the sensor to bad, false to set it to good
      * @return true if the operation was successful, false otherwise
      */
-    bool makeSensorBad(int sensor_id);
+    bool makeSensorBad(int sensor_id, bool is_bad);
 
     /**
      * @brief Makes a specific sensor report noisy readings (for testing)
      * @param sensor_id ID of the sensor to make noisy
+     * @param is_noisy true to set the sensor to noisy, false to set it to normal
      * @return true if the operation was successful, false otherwise
      */
-    bool makeSensorNoisy(int sensor_id);
+    bool makeSensorNoisy(int sensor_id, bool is_noisy);
 
     /**
      * @brief Formats a timestamp to a human-readable string
@@ -110,6 +112,44 @@ public:
      * @return Formatted timestamp string
      */
     std::string formatTimestamp(const std::chrono::system_clock::time_point& tp);
+
+    /**
+     * @brief Gets the temperature from a specific sensor
+     * @param sensor_id ID of the sensor
+     * @param temperature Output parameter for the temperature reading
+     * @return true if the reading is valid, false otherwise
+     */
+    bool getSensorTemperature(const std::string& sensor_id, double& temperature);
+
+    /**
+     * @brief Checks if the MCU is online
+     * @return true if the MCU is online, false otherwise
+     */
+    bool isOnline() const { return running_; }
+
+    /**
+     * @brief Gets the number of active sensors
+     * @return Number of active sensors
+     */
+    int getActiveSensorCount() const;
+
+    /**
+     * @brief Gets all sensors in this MCU
+     * @return Vector of temperature sensors
+     */
+    const std::vector<std::unique_ptr<TemperatureSensor>>& getSensors() const { return sensors_; }
+
+    /**
+     * @brief Sets the MCU's fault state
+     * @param is_faulty true to set the MCU as faulty, false to set it as normal
+     */
+    void setFaulty(bool is_faulty);
+
+    /**
+     * @brief Gets the MCU's fault state
+     * @return true if the MCU is faulty, false otherwise
+     */
+    bool isFaulty() const { return is_faulty_; }
 
 private:
     /**
@@ -151,6 +191,7 @@ private:
     std::unique_ptr<common::Logger> logger_;                    ///< Logger for MCU-level logging
     std::unique_ptr<common::Alarm> alarm_;                      ///< Alarm system for MCU-level alerts
     bool alarm_raised_;                                         ///< Flag indicating if an alarm has been raised
+    bool is_faulty_ = false;                                    ///< Flag indicating if the MCU is in a faulty state
 
     std::vector<std::deque<float>> sensor_readings_;           ///< Temperature reading history for each sensor (last 5 readings)
     

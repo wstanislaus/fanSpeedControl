@@ -310,8 +310,9 @@ int TempMonitorAndCooling::calculate_fan_speed() const {
     double max_temp = -1.0;
     for (const auto& mcu : temperature_history_) {
         for (const auto& sensor : mcu.second) {
-            //avoid bad sensors
-            if (sensor.second.readings.back().status == "Bad") {
+            //avoid bad or noisysensors
+            if (sensor.second.readings.back().status != "Good") {
+                logger_->debug("Sensor " + std::to_string(sensor.first) + " is not good, skipping");
                 continue;
             }
             max_temp = std::max(max_temp, sensor.second.readings.back().temperature);
