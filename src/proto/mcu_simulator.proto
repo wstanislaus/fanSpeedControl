@@ -12,11 +12,20 @@ service MCUSimulatorService {
   
   // Control simulation parameters
   rpc SetSimulationParams (SimulationParams) returns (SimulationResponse) {}
+
+  // Make an MCU faulty
+  rpc SetMCUFault (MCUFaultRequest) returns (FaultResponse) {}
+
+  // Make a sensor in an MCU faulty
+  rpc SetSensorFault (SensorFaultRequest) returns (FaultResponse) {}
+
+  // Make a sensor in an MCU noisy
+  rpc SetSensorNoise (SensorNoiseRequest) returns (FaultResponse) {}
 }
 
 // Request message for getting temperature
 message TemperatureRequest {
-  string mcu_id = 1;
+  string mcu_name = 1;
   string sensor_id = 2;
 }
 
@@ -29,7 +38,7 @@ message TemperatureResponse {
 
 // Request message for getting MCU status
 message StatusRequest {
-  string mcu_id = 1;  // Optional, if empty returns status of all MCUs
+  string mcu_name = 1;  // Optional, if empty returns status of all MCUs
 }
 
 // Response message containing MCU status
@@ -38,7 +47,7 @@ message StatusResponse {
 }
 
 message MCUStatus {
-  string mcu_id = 1;
+  string mcu_name = 1;
   bool is_online = 2;
   int32 active_sensors = 3;
   repeated SensorStatus sensors = 4;
@@ -49,6 +58,7 @@ message SensorStatus {
   bool is_active = 2;
   string interface = 3;
   string address = 4;
+  bool is_noisy = 5;
 }
 
 // Message for setting simulation parameters
@@ -62,4 +72,31 @@ message SimulationParams {
 message SimulationResponse {
   bool success = 1;
   string message = 2;
+}
+
+// Request message for setting MCU fault
+message MCUFaultRequest {
+  string mcu_name = 1;
+  bool is_faulty = 2;
+}
+
+// Request message for setting sensor fault
+message SensorFaultRequest {
+  string mcu_name = 1;
+  string sensor_id = 2;
+  bool is_faulty = 3;
+}
+
+// Request message for setting sensor noise
+message SensorNoiseRequest {
+  string mcu_name = 1;
+  string sensor_id = 2;
+  bool is_noisy = 3;
+}
+
+// Response message for fault operations
+message FaultResponse {
+  bool success = 1;
+  string message = 2;
+  string current_state = 3;  // Current state of the MCU/sensor after the operation
 } 

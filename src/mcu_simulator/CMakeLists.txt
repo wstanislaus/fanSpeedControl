@@ -4,6 +4,7 @@ set(SOURCES
     mcu_simulator.cpp
     mcu.cpp
     temperature_sensor.cpp
+    mcu_simulator_server.cpp
 )
 
 # Create executable
@@ -14,6 +15,7 @@ target_include_directories(mcu_simulator PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${MOSQUITTO_INCLUDE_DIRS}
     ${YAML_INCLUDE_DIRS}
+    ${CMAKE_BINARY_DIR}/src/proto
 )
 
 # Link libraries
@@ -23,6 +25,7 @@ target_link_libraries(mcu_simulator PRIVATE
     nlohmann_json::nlohmann_json
     pthread
     common
+    proto
 )
 
 # Install targets

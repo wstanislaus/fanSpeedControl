@@ -11,6 +11,9 @@
 
 namespace mcu_simulator {
 
+// Forward declaration
+class MCUSimulatorServer;
+
 /**
  * @class MCUSimulator
  * @brief Simulates multiple MCUs (Microcontroller Units) with temperature sensors and MQTT communication
@@ -47,13 +50,6 @@ public:
     void stop();
 
     /**
-     * @brief Retrieves an MCU instance by its name
-     * @param name The name of the MCU to retrieve
-     * @return Shared pointer to the MCU if found, nullptr otherwise
-     */
-    std::shared_ptr<MCU> getMCU(const std::string& name);
-
-    /**
      * @brief Makes an MCU disappear from the system (for testing purposes)
      * @param name The name of the MCU to make disappear
      * @return true if the operation was successful, false otherwise
@@ -66,6 +62,12 @@ public:
      * @return true if the operation was successful, false otherwise
      */
     bool makeMCUReappear(const std::string& name);
+
+    /**
+     * @brief Gets all MCUs in the simulator
+     * @return Vector of unique pointers to all MCUs
+     */
+    const std::vector<std::unique_ptr<MCU>>& getAllMCUs() const { return mcus_; }
 
 private:
     /**
@@ -97,6 +99,9 @@ private:
     std::unique_ptr<common::Logger> logger_;                    ///< Logger for simulator-level logging
     std::unique_ptr<common::Alarm> alarm_;                      ///< Alarm system for simulator-level alerts
     std::string name_;
+
+    // RPC server
+    std::unique_ptr<MCUSimulatorServer> rpc_server_;            ///< RPC server for MCU simulator
 };
 
 } // namespace mcu_simulator 

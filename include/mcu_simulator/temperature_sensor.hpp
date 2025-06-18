@@ -64,10 +64,11 @@ public:
     float readTemperature();
 
     /**
-     * @brief Makes the sensor report bad readings (for testing)
+     * @brief Sets the status of the sensor
+     * @param is_bad true to set the sensor to bad, false to set it to good
      * @note This will cause the sensor to report invalid temperatures
      */
-    void makeBad();
+    void setStatus(bool is_bad) { status_ = is_bad ? "Bad" : "Good"; }
 
     /**
      * @brief Sets whether the sensor should report noisy readings
@@ -103,6 +104,15 @@ public:
      * @return True if the alarm has been raised, false otherwise
      */
     bool getAlarmRaised();
+    std::string getInterface() const { return (config_.interface == Interface::I2C) ? "I2C" : "SPI"; }
+    
+    std::string getAddress() const;
+
+    /**
+     * @brief Gets the noisy status of the sensor
+     * @return True if the sensor is noisy, false otherwise
+     */
+    bool getNoisy() const { return is_noisy_; }
 
 private:
     int id_;                                                    ///< Unique identifier for the sensor

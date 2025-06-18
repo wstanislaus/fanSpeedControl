@@ -18,6 +18,15 @@ bool Config::load(const std::string& config_file) {
     try {
         config_ = YAML::LoadFile(config_file);
         loaded_ = true;
+        //read and populate all rpc server settings
+        const auto& rpc_servers = config_["RPCServers"];
+        for (const auto& server : rpc_servers) {
+            std::string server_name = server.first.as<std::string>();
+            RPCServerConfig server_config;
+            server_config.port = server.second["Port"].as<uint16_t>();
+            server_config.max_connections = server.second["MaxConnections"].as<uint32_t>();
+            rpc_settings_.servers[server_name] = server_config;
+        }
         return true;
     } catch (const YAML::Exception& e) {
         std::cerr << "Failed to load config file: " << e.what() << std::endl;
@@ -85,6 +94,14 @@ TemperatureSimConfig Config::getTemperatureSimConfig() const {
         std::cerr << "Failed to parse temperature simulation config: " << e.what() << std::endl;
     }
     return config;
+}
+
+const RPCServerConfig* Config::getRPCServerConfig(const std::string& server_name) const {
+    auto it = rpc_settings_.servers.find(server_name);
+    if (it != rpc_settings_.servers.end()) {
+        return &(it->second);
+    }
+    return nullptr;
 }
 
 } // namespace common 

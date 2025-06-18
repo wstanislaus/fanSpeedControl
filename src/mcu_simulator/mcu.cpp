@@ -42,6 +42,7 @@ MCU::MCU(const std::string& name, int num_sensors,
     , mqtt_settings_(mqtt_settings)
     , config_file_(config_file)
     , alarm_raised_(false)
+    , is_faulty_(false)
 {
     // Create temperature sensors based on config
     for (int i = 0; i < num_sensors; ++i) {
@@ -176,12 +177,12 @@ void MCU::checkAlarm() {
  * @param sensor_id ID of the sensor to make bad (1-based)
  * @return true if the operation was successful, false if sensor_id is invalid
  */
-bool MCU::makeSensorBad(int sensor_id) {
+bool MCU::makeSensorBad(int sensor_id, bool is_bad) {
     if (sensor_id < 1 || sensor_id > sensors_.size()) {
         logger_->warning("Invalid sensor ID: " + std::to_string(sensor_id));
         return false;
     }
-    sensors_[sensor_id - 1]->makeBad();
+    sensors_[sensor_id - 1]->setStatus(is_bad);
     logger_->info("Sensor " + std::to_string(sensor_id) + " marked as bad");
     alarm_->raise(common::AlarmSeverity::MEDIUM, "MCU " + name_ + " Sensor " + std::to_string(sensor_id) + " marked as bad");
     return true;
@@ -196,12 +197,12 @@ bool MCU::makeSensorBad(int sensor_id) {
  * @param sensor_id ID of the sensor to make noisy (1-based)
  * @return true if the operation was successful, false if sensor_id is invalid
  */
-bool MCU::makeSensorNoisy(int sensor_id) {
+bool MCU::makeSensorNoisy(int sensor_id, bool is_noisy) {
     if (sensor_id < 1 || sensor_id > sensors_.size()) {
         logger_->warning("Invalid sensor ID: " + std::to_string(sensor_id));
         return false;
     }
-    sensors_[sensor_id - 1]->setNoisy(true);
+    sensors_[sensor_id - 1]->setNoisy(is_noisy);
     logger_->info("Sensor " + std::to_string(sensor_id) + " set to noisy mode");
     alarm_->raise(common::AlarmSeverity::LOW, "MCU " + name_ + " Sensor " + std::to_string(sensor_id) + " set to noisy mode");
     return true;
@@ -307,10 +308,18 @@ void MCU::readAndPublishTemperatures() {
         if (readings.size() > 5) {
             readings.pop_front();
         }
+                // Status can be Good, Bad, Noisy
+        std::string status = sensors_[i]->getStatus();
+        if (sensors_[i]->getNoisy()) {
+            status = "Noisy";
+        } 
 
         // Check for erratic readings
         if (readings.size() == 5 && checkErraticReadings(readings)) {
-            sensors_[i]->makeBad();
+            //Check if not nosisy falg set
+            if (!sensors_[i]->getNoisy()) {
+                status = "Bad";
+            }
             logger_->warning("Sensor " + std::to_string(i + 1) + " showing erratic readings");
             alarm_->raise(common::AlarmSeverity::HIGH, 
                 "MCU " + name_ + " Sensor " + std::to_string(i + 1) + " showing erratic readings");
@@ -320,7 +329,9 @@ void MCU::readAndPublishTemperatures() {
 
         // Check if temperature is below threshold
         if (temp < temp_settings_.bad_threshold) {
-            sensors_[i]->makeBad();
+            if (!sensors_[i]->getNoisy()) {
+                status = "Bad";
+            }
             logger_->error("Sensor " + std::to_string(i + 1) + " temperature below threshold: " + 
                 std::to_string(temp));
             alarm_->raise(common::AlarmSeverity::CRITICAL, 
@@ -344,7 +355,7 @@ void MCU::readAndPublishTemperatures() {
             {"SensorID", sensors_[i]->getId()},
             {"ReadAt", formatTimestamp(sensors_[i]->getLastReadTime())},
             {"Value", std::round(temp * 100.0) / 100.0},  // Round to 2 decimal places
-            {"Status", sensors_[i]->getStatus()}
+            {"Status", status}
         };
         sensor_data.push_back(sensor_json);
     }
@@ -380,6 +391,35 @@ void MCU::readAndPublishTemperatures() {
             logger_->debug("Published temperature data for " + name_);
         }
         last_read_time_ = now;
+    }
+}
+
+bool MCU::getSensorTemperature(const std::string& sensor_id, double& temperature) {
+    try {
+        int id = std::stoi(sensor_id) - 1;
+        if (id < 0 || id >= sensors_.size() || sensors_[id]->getStatus() == "bad") {
+            return false;
+        }
+        temperature = sensors_[id]->readTemperature();
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+int MCU::getActiveSensorCount() const {
+    return std::count_if(sensors_.begin(), sensors_.end(),
+                        [](const auto& sensor) { return sensor->getStatus() != "bad"; });
+}
+
+void MCU::setFaulty(bool is_faulty) {
+    is_faulty_ = is_faulty;
+    if (is_faulty_) {
+        logger_->error("MCU " + name_ + " set to faulty state");
+        alarm_->raise(common::AlarmSeverity::HIGH, "MCU " + name_ + " set to faulty state");
+    } else {
+        logger_->info("MCU " + name_ + " set to normal state");
+        alarm_->clear("MCU " + name_ + " is back to normal");
     }
 }
 

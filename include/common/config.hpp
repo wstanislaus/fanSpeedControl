@@ -3,6 +3,8 @@
 #include <string>
 #include <yaml-cpp/yaml.h>
 #include "common/mqtt_client.hpp"
+#include <cstdint>
+#include <unordered_map>
 
 namespace common {
 
@@ -19,6 +21,15 @@ struct TemperatureSimConfig {
     float start_temp;
     float end_temp;
     float step_size;
+};
+
+struct RPCServerConfig {
+    uint16_t port;
+    uint32_t max_connections;
+};
+
+struct RPCServerSettings {
+    std::unordered_map<std::string, RPCServerConfig> servers;
 };
 
 class Config {
@@ -58,6 +69,13 @@ public:
      */
     TemperatureSimConfig getTemperatureSimConfig() const;
 
+    
+    // Get RPC server settings
+    const RPCServerSettings& getRPCServerSettings() const { return rpc_settings_; }
+    
+    // Get specific RPC server config
+    const RPCServerConfig* getRPCServerConfig(const std::string& server_name) const;
+
 private:
     /**
      * @brief Private constructor to enforce singleton pattern
@@ -82,6 +100,7 @@ private:
     YAML::Node config_;                                         ///< Loaded configuration data
     bool loaded_ = false;                                       ///< Whether configuration has been loaded
     TemperatureSimConfig sim_config_;                           ///< Temperature sensor simulation configuration
+    RPCServerSettings rpc_settings_;
 };
 
 } // namespace common 

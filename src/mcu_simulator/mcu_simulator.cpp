@@ -1,4 +1,5 @@
 #include "mcu_simulator/mcu_simulator.hpp"
+#include "mcu_simulator/mcu_simulator_server.hpp"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -116,6 +117,10 @@ bool MCUSimulator::initialize() {
             logger_->info("MCU " + mcu_name + " initialized successfully");
         }
 
+        // Initialize RPC server
+        rpc_server_ = std::make_unique<MCUSimulatorServer>(*this);
+        logger_->info("RPC server initialized");
+
         logger_->info("MCU Simulator initialized successfully with " + std::to_string(mcus_.size()) + " MCUs");
         return true;
     } catch (const std::exception& e) {
@@ -135,9 +140,21 @@ void MCUSimulator::start() {
     running_ = true;
     logger_->info("Starting MCU Simulator...");
 
+    // Start all MCUs
     for (const auto& mcu : mcus_) {
         mcu->start();
     }
+
+    // Start RPC server
+    if (rpc_server_) {
+        if (rpc_server_->start()) {
+            logger_->info("RPC server started successfully");
+        } else {
+            logger_->error("Failed to start RPC server");
+            alarm_->raise(common::AlarmSeverity::HIGH, "Failed to start RPC server");
+        }
+    }
+
     logger_->info("MCU Simulator started successfully");
 }
 
@@ -152,9 +169,17 @@ void MCUSimulator::stop() {
     running_ = false;
     logger_->info("Stopping MCU Simulator...");
 
+    // Stop RPC server
+    if (rpc_server_) {
+        rpc_server_->stop();
+        logger_->info("RPC server stopped");
+    }
+
+    // Stop all MCUs
     for (const auto& mcu : mcus_) {
         mcu->stop();
     }
+
     logger_->info("MCU Simulator stopped");
 }
 
@@ -205,5 +230,4 @@ MCU::TemperatureSettings MCUSimulator::loadTemperatureSettings(const YAML::Node&
     }
     return settings;
 }
-
 } // namespace mcu_simulator 

@@ -69,10 +69,6 @@ float TemperatureSensor::readTemperature() {
     return base_temp;
 }
 
-void TemperatureSensor::makeBad() {
-    status_ = "Bad";
-}
-
 void TemperatureSensor::setNoisy(bool noisy) {
     is_noisy_ = noisy;
 }
@@ -87,6 +83,18 @@ void TemperatureSensor::clearAlarm() {
 
 bool TemperatureSensor::getAlarmRaised() {
     return alarm_raised_;
+}
+
+std::string TemperatureSensor::getAddress() const {
+    if (config_.interface == Interface::I2C) {
+        char hex[8];
+        snprintf(hex, sizeof(hex), "0x%02X", config_.i2c_address);
+        return hex;
+    } else {
+        char hex[8];
+        snprintf(hex, sizeof(hex), "0x%02X", config_.cs_line);
+        return hex;
+    }
 }
 
 } // namespace mcu_simulator
