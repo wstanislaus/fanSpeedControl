@@ -14,6 +14,7 @@ class FanSimulator;
 class TempMonitorAndCooling;
 class LogManager;
 class AlarmManager;
+class FanControlSystemServer;
 }
 
 /**
@@ -90,4 +91,7 @@ private:
 
     // MQTT settings
     common::MQTTClient::Settings mqtt_settings_;                           ///< MQTT communication settings
+
+    // RPC server
+    std::unique_ptr<fan_control_system::FanControlSystemServer> rpc_server_; ///< RPC server for fan control system
 }; 

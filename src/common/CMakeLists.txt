@@ -25,7 +25,6 @@ target_link_libraries(common
         yaml-cpp
         nlohmann_json::nlohmann_json
         ${gRPC_LIBRARIES}
-        proto
 )
 
 # Set library properties

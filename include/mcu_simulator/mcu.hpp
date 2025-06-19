@@ -151,6 +151,15 @@ public:
      */
     bool isFaulty() const { return is_faulty_; }
 
+    /**
+     * @brief Sets the simulation parameters for a specific sensor
+     * @param sensor_id ID of the sensor
+     * @param start_temp Start temperature for simulation
+     * @param end_temp End temperature for simulation
+     * @param step_size Step size for simulation
+     */
+    bool setSimulationParams(int sensor_id, double start_temp, double end_temp, double step_size);
+
 private:
     /**
      * @brief Reads temperatures from all sensors and publishes them

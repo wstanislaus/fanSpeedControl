@@ -8,6 +8,9 @@ ARG GROUP_ID
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Set LD_LIBRARY_PATH environment variable
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
 # Install build essentials and required packages
 RUN apt-get update && apt-get install -y \
     build-essential \

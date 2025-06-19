@@ -107,7 +107,21 @@ grpc::Status MCUSimulatorServiceImpl::SetSimulationParams(grpc::ServerContext* c
                                                         const SimulationParams* request,
                                                         SimulationResponse* response) {
     try {
-        // TODO: Implement simulation parameter setting
+        const auto& mcus = simulator_.getAllMCUs();
+        auto it = std::find_if(mcus.begin(), mcus.end(),
+                             [&](const auto& mcu) { return mcu->getName() == request->mcu_name(); });
+        
+        if (it == mcus.end()) {
+            response->set_success(false);
+            response->set_message("MCU not found: " + request->mcu_name());
+            return grpc::Status(grpc::StatusCode::NOT_FOUND, "MCU not found");
+        }
+        bool success = (*it)->setSimulationParams(std::stoi(request->sensor_id()), request->start_temp(), request->end_temp(), request->step_size());
+        if (!success) {
+            response->set_success(false);
+            response->set_message("Failed to set simulation parameters for sensor: " + request->sensor_id());
+            return grpc::Status(grpc::StatusCode::INTERNAL, "Failed to set simulation parameters for sensor: " + request->sensor_id());
+        }
         response->set_success(true);
         response->set_message("Simulation parameters updated successfully");
         return grpc::Status::OK;

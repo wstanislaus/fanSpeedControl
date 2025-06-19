@@ -19,7 +19,8 @@ target_link_libraries(debug_cli PRIVATE
     ${YAML_LIBRARIES}
     nlohmann_json::nlohmann_json
     common
-    proto
+    mcu_simulator_proto
+    fan_control_system_proto
 )
 
 # Install targets

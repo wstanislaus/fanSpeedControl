@@ -13,6 +13,7 @@
 #include "fan_control_system/fan_simulator.hpp"
 #include "common/mqtt_client.hpp"
 #include "common/logger.hpp"
+#include "common/alarm.hpp"
 
 namespace fan_control_system {
 
@@ -160,6 +161,8 @@ private:
 
     // Common components
     std::unique_ptr<common::Logger> logger_;               ///< Logger for temperature monitor
+    // Common Alarm
+    std::unique_ptr<common::Alarm> alarm_;               ///< Alarm for temperature monitor
     
     // Thread control
     std::thread main_thread_;                             ///< Main monitoring thread
@@ -171,6 +174,7 @@ private:
     int fan_speed_min_{20};                              ///< Minimum fan speed percentage
     int fan_speed_max_{100};                             ///< Maximum fan speed percentage
     int update_interval_ms_{1000};                       ///< Update interval in milliseconds
+    std::chrono::minutes history_duration_{10};          ///< Duration to keep temperature history
 
     // Name
     std::string name_;                                    ///< Name of the temperature monitor

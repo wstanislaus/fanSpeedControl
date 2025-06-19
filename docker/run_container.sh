@@ -46,6 +46,7 @@ run_container() {
     INPUT_ARGS=" \
         -v $SOURCE_DIR:/app \
         -e DEBIAN_FRONTEND=noninteractive \
+        -e LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH \
         --name fan-control-container \
         fan-control-system:latest \
         sleep infinity \
@@ -67,8 +68,12 @@ run_container() {
         exit 1
     fi
 
-    echo "building the application..."
+    echo "Setting up environment and building the application..."
     docker exec $CONTAINER_ID bash -c "
+        # Ensure LD_LIBRARY_PATH is set in bash profile for interactive sessions
+        echo 'export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH' >> ~/.bashrc
+        echo 'export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH' >> ~/.profile
+        
         cd /app &&
         sudo mkdir -p /etc/fan_control_system &&
         sudo mkdir -p /var/log/fan_control_system &&

@@ -73,6 +73,12 @@ void TemperatureSensor::setNoisy(bool noisy) {
     is_noisy_ = noisy;
 }
 
+void TemperatureSensor::setSimulationParams(const double start_temp, const double end_temp, const double step_size) {
+    start_temp_ = start_temp;
+    end_temp_ = end_temp;
+    step_size_ = step_size;
+}
+
 void TemperatureSensor::raiseAlarm() {
     alarm_raised_ = true;
 }

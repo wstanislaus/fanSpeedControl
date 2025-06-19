@@ -32,6 +32,7 @@ TempMonitorAndCooling::TempMonitorAndCooling(const YAML::Node& config,
     auto log_level = config_["AppLogLevel"]["FanControlSystem"][name_].as<std::string>();
     logger_ = std::make_unique<common::Logger>(name_, log_level, mqtt_client_);
     logger_->info("Temperature Monitor initializing...");
+    alarm_ = std::make_unique<common::Alarm>(name_, mqtt_client_);
 
     if (!load_mcu_configs()) {
         throw std::runtime_error("Failed to initialize temperature monitor");
@@ -161,10 +162,15 @@ bool TempMonitorAndCooling::initialize() {
         fan_speed_max_ = temp_monitor["MaxDutyCycle"].as<int>();
         update_interval_ms_ = temp_monitor["UpdateIntervalMs"].as<int>();
 
+        // Load temperature history duration
+        int history_duration_minutes = config_["TemperatureHistoryDurationMinutes"].as<int>();
+        history_duration_ = std::chrono::minutes(history_duration_minutes);
+
         logger_->info("Loaded temperature thresholds: " + std::to_string(temp_threshold_low_) + 
                      "°C - " + std::to_string(temp_threshold_high_) + "°C");
         logger_->info("Loaded fan speed range: " + std::to_string(fan_speed_min_) + 
                      "% - " + std::to_string(fan_speed_max_) + "%");
+        logger_->info("Loaded temperature history duration: " + std::to_string(history_duration_minutes) + " minutes");
 
         // Subscribe to temperature topics
         std::string topic = "sensors/+/temperature";
@@ -184,6 +190,7 @@ bool TempMonitorAndCooling::initialize() {
             {"temp_threshold_high", temp_threshold_high_},
             {"fan_speed_min", fan_speed_min_},
             {"fan_speed_max", fan_speed_max_},
+            {"history_duration_minutes", history_duration_minutes},
             {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
         };
         mqtt_client_->publish("temp_monitor/config", config_data.dump());
@@ -251,6 +258,11 @@ void TempMonitorAndCooling::process_temperature_reading(
         std::lock_guard<std::mutex> lock(history_mutex_);
         auto& history = temperature_history_[mcu_name][sensor_id];
         
+        // Initialize history duration if this is the first reading for this sensor
+        if (history.readings.empty()) {
+            history.history_duration = history_duration_;
+        }
+        
         // Add new reading
         TemperatureReading reading{
             mcu_name,
@@ -309,17 +321,31 @@ int TempMonitorAndCooling::calculate_fan_speed() const {
     // Find highest temperature across all sensors
     double max_temp = -1.0;
     for (const auto& mcu : temperature_history_) {
+        // Calculate mean and standard deviations of all the sensors for a given MCU
+        // If the standard deviation is too high, raise an alarm and skip this MCU as bad readings
+        double mean = 0.0;
+        double std_dev = 0.0;
+        int num_readings = 0;
         for (const auto& sensor : mcu.second) {
-            //avoid bad or noisysensors
             if (sensor.second.readings.back().status != "Good") {
                 logger_->debug("Sensor " + std::to_string(sensor.first) + " is not good, skipping");
                 continue;
             }
-            max_temp = std::max(max_temp, sensor.second.readings.back().temperature);
-   
+            mean += sensor.second.readings.back().temperature;
+            std_dev += std::pow(sensor.second.readings.back().temperature - mean, 2);
+            num_readings++;
         }
+        mean /= num_readings;
+        std_dev = std::sqrt(std_dev / num_readings);
+        if (std_dev > 1.0) {
+            logger_->debug("MCU " + mcu.first + " has high standard deviation: " + std::to_string(std_dev));
+            alarm_->raise(common::AlarmSeverity::HIGH, "MCU " + mcu.first + " has high standard deviation: " + std::to_string(std_dev) + "°C hence skipping");
+            continue;
+        }
+        max_temp = std::max(max_temp, mean);
     }
 
+    // If no good readings, return minimum fan speed
     if (max_temp < 0.0) {
         logger_->debug("No temperature readings available, using minimum fan speed");
         return fan_speed_min_;

@@ -25,7 +25,7 @@ target_link_libraries(mcu_simulator PRIVATE
     nlohmann_json::nlohmann_json
     pthread
     common
-    proto
+    mcu_simulator_proto
 )
 
 # Install targets

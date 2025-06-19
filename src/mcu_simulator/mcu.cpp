@@ -208,6 +208,14 @@ bool MCU::makeSensorNoisy(int sensor_id, bool is_noisy) {
     return true;
 }
 
+bool MCU::setSimulationParams(int sensor_id, double start_temp, double end_temp, double step_size) {
+    if (sensor_id < 1 || sensor_id > sensors_.size()) {
+        logger_->warning("Invalid sensor ID: " + std::to_string(sensor_id));
+        return false;
+    }
+    sensors_[sensor_id - 1]->setSimulationParams(start_temp, end_temp, step_size);
+    return true;
+}
 /**
  * @brief Formats a timestamp to a human-readable string
  * 

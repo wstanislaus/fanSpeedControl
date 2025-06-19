@@ -3,6 +3,7 @@
 #include "fan_control_system/temp_monitor_and_cooling.hpp"
 #include "fan_control_system/log_manager.hpp"
 #include "fan_control_system/alarm_manager.hpp"
+#include "fan_control_system/fan_control_system_server.hpp"
 #include <iostream>
 #include <stdexcept>
 #include "common/config.hpp"
@@ -66,6 +67,12 @@ void FanControlSystem::stop() {
         return;
     }
 
+    // Stop RPC server
+    if (rpc_server_) {
+        rpc_server_->stop();
+        std::cout << "RPC server stopped" << std::endl;
+    }
+
     // Stop all the sub-systems
     if (alarm_manager_) alarm_manager_->stop();
     if (log_manager_) log_manager_->stop();
@@ -107,7 +114,7 @@ bool FanControlSystem::load_configuration() {
  * @brief Initializes all system components
  * 
  * Creates and initializes the fan simulator, temperature monitor,
- * log manager, and alarm manager components.
+ * log manager, alarm manager, and RPC server components.
  * 
  * @return true if all components were initialized successfully, false otherwise
  */
@@ -126,6 +133,10 @@ bool FanControlSystem::initialize_components() {
         
         alarm_manager_ = std::make_unique<fan_control_system::AlarmManager>(config_, mqtt_settings_);
         std::cout << "Alarm manager initialized" << std::endl;
+
+        // Initialize RPC server
+        rpc_server_ = std::make_unique<fan_control_system::FanControlSystemServer>(*this);
+        std::cout << "RPC server initialized" << std::endl;
 
         std::cout << "All components initialized successfully" << std::endl;
         return true;
@@ -147,6 +158,15 @@ void FanControlSystem::main_thread_function() {
     if (log_manager_) log_manager_->start();
     if (fan_simulator_) fan_simulator_->start();
     if (temp_monitor_) temp_monitor_->start();
+
+    // Start RPC server
+    if (rpc_server_) {
+        if (rpc_server_->start()) {
+            std::cout << "RPC server started successfully" << std::endl;
+        } else {
+            std::cerr << "Failed to start RPC server" << std::endl;
+        }
+    }
 
     std::cout << "All sub-systems started" << std::endl;
 

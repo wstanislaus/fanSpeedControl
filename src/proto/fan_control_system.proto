@@ -1,0 +1,328 @@
+syntax = "proto3";
+
+package fan_control_system;
+
+// Service definition for Fan Control System
+service FanControlSystemService {
+  // Fan Simulator operations
+  rpc GetFanStatus (FanStatusRequest) returns (FanStatusResponse) {}
+  rpc SetFanSpeed (FanSpeedRequest) returns (FanSpeedResponse) {}
+  rpc MakeFanBad (FanFaultRequest) returns (FaultResponse) {}
+  rpc MakeFanGood (FanFaultRequest) returns (FaultResponse) {}
+  rpc SetFanPWM (FanPWMRequest) returns (FanPWMResponse) {}
+  rpc GetFanNoiseLevel (FanNoiseRequest) returns (FanNoiseResponse) {}
+  
+  // Temperature Monitor operations
+  rpc GetTemperatureStatus (TemperatureStatusRequest) returns (TemperatureStatusResponse) {}
+  rpc GetTemperatureHistory (TemperatureHistoryRequest) returns (TemperatureHistoryResponse) {}
+  rpc SetTemperatureThresholds (TemperatureThresholdsRequest) returns (TemperatureThresholdsResponse) {}
+  rpc GetCoolingStatus (CoolingStatusRequest) returns (CoolingStatusResponse) {}
+  
+  // Alarm Manager operations
+  rpc GetAlarmStatus (AlarmStatusRequest) returns (AlarmStatusResponse) {}
+  rpc RaiseAlarm (RaiseAlarmRequest) returns (RaiseAlarmResponse) {}
+  rpc GetAlarmHistory (AlarmHistoryRequest) returns (AlarmHistoryResponse) {}
+  rpc EnableAlarm (AlarmControlRequest) returns (AlarmControlResponse) {}
+  rpc DisableAlarm (AlarmControlRequest) returns (AlarmControlResponse) {}
+  
+  // Log Manager operations
+  rpc GetLogStatus (LogStatusRequest) returns (LogStatusResponse) {}
+  rpc GetRecentLogs (RecentLogsRequest) returns (RecentLogsResponse) {}
+  rpc SetLogLevel (LogLevelRequest) returns (LogLevelResponse) {}
+  rpc RotateLogFile (LogRotateRequest) returns (LogRotateResponse) {}
+
+}
+
+// ============================================================================
+// Fan Simulator Messages
+// ============================================================================
+
+message FanStatusRequest {
+  string fan_name = 1;  // Optional, if empty returns status of all fans
+}
+
+message FanStatusResponse {
+  repeated FanStatus fans = 1;
+}
+
+message FanStatus {
+  string name = 1;
+  string model = 2;
+  bool is_online = 3;
+  int32 current_duty_cycle = 4;
+  int32 current_pwm = 5;
+  int32 noise_level_db = 6;
+  string status = 7;
+  string interface = 8;
+  uint32 i2c_address = 9;
+  int32 pwm_min = 10;
+  int32 pwm_max = 11;
+  int32 duty_cycle_min = 12;
+  int32 duty_cycle_max = 13;
+}
+
+message FanSpeedRequest {
+  string fan_name = 1;  // Optional, if empty sets speed for all fans
+  int32 duty_cycle = 2;  // 0-100
+}
+
+message FanSpeedResponse {
+  bool success = 1;
+  string message = 2;
+  repeated FanSpeedResult results = 3;
+}
+
+message FanSpeedResult {
+  string fan_name = 1;
+  bool success = 2;
+  int32 previous_duty_cycle = 3;
+  int32 new_duty_cycle = 4;
+  string error_message = 5;
+}
+
+message FanFaultRequest {
+  string fan_name = 1;
+}
+
+message FanPWMRequest {
+  string fan_name = 1;
+  int32 pwm_count = 2;
+}
+
+message FanPWMResponse {
+  bool success = 1;
+  string message = 2;
+  int32 previous_pwm = 3;
+  int32 new_pwm = 4;
+  int32 corresponding_duty_cycle = 5;
+}
+
+message FanNoiseRequest {
+  string fan_name = 1;
+}
+
+message FanNoiseResponse {
+  int32 noise_level_db = 1;
+  string noise_category = 2;  // "QUIET", "MODERATE", "LOUD", etc.
+  bool is_above_threshold = 3;
+  int32 threshold_db = 4;
+}
+
+// ============================================================================
+// Temperature Monitor Messages
+// ============================================================================
+
+message TemperatureStatusRequest {
+  string mcu_name = 1;  // Optional, if empty returns status of all MCUs
+  int32 sensor_id = 2;  // Optional, if 0 returns status of all sensors
+}
+
+message TemperatureStatusResponse {
+  repeated MCUTemperatureStatus mcu_status = 1;
+}
+
+message MCUTemperatureStatus {
+  string mcu_name = 1;
+  bool is_online = 2;
+  repeated SensorTemperatureStatus sensors = 3;
+}
+
+message SensorTemperatureStatus {
+  int32 sensor_id = 1;
+  double current_temperature = 2;
+  string status = 3;  // "GOOD", "BAD", "NOISY"
+  string timestamp = 4;
+  bool is_active = 5;
+}
+
+message TemperatureHistoryRequest {
+  string mcu_name = 1;
+  int32 sensor_id = 2;
+  int32 max_readings = 3;  // Maximum number of readings to return
+}
+
+message TemperatureHistoryResponse {
+  repeated ProtoTemperatureReading readings = 1;
+  int32 total_readings = 2;
+}
+
+message ProtoTemperatureReading {
+  string mcu_name = 1;
+  int32 sensor_id = 2;
+  double temperature = 3;
+  string status = 4;
+  string timestamp = 5;
+}
+
+message TemperatureThresholdsRequest {
+  double temp_threshold_low = 1;
+  double temp_threshold_high = 2;
+  int32 fan_speed_min = 3;
+  int32 fan_speed_max = 4;
+}
+
+message TemperatureThresholdsResponse {
+  bool success = 1;
+  string message = 2;
+  TemperatureThresholds current_thresholds = 3;
+}
+
+message TemperatureThresholds {
+  double temp_threshold_low = 1;
+  double temp_threshold_high = 2;
+  int32 fan_speed_min = 3;
+  int32 fan_speed_max = 4;
+}
+
+message CoolingStatusRequest {
+  // Empty request to get current cooling status
+}
+
+message CoolingStatusResponse {
+  double average_temperature = 1;
+  int32 current_fan_speed = 2;
+  string cooling_mode = 3;  // "AUTO", "MANUAL", "EMERGENCY"
+  bool is_cooling_adequate = 4;
+  repeated string active_alarms = 5;
+}
+
+// ============================================================================
+// Alarm Manager Messages
+// ============================================================================
+
+message AlarmStatusRequest {
+  string alarm_name = 1;  // Optional, if empty returns status of all alarms
+}
+
+message AlarmStatusResponse {
+  repeated ProtoAlarmStatus alarms = 1;
+}
+
+message ProtoAlarmStatus {
+  string name = 1;
+  string description = 2;
+  bool is_active = 3;
+  ProtoAlarmSeverity severity = 4;
+  string timestamp = 5;
+  repeated string actions = 6;
+  bool is_enabled = 7;
+}
+
+enum ProtoAlarmSeverity {
+  PROTO_ALARM_INFO = 0;
+  PROTO_ALARM_WARNING = 1;
+  PROTO_ALARM_ERROR = 2;
+  PROTO_ALARM_CRITICAL = 3;
+}
+
+message RaiseAlarmRequest {
+  string alarm_name = 1;
+  string message = 2;
+  ProtoAlarmSeverity severity = 3;
+}
+
+message RaiseAlarmResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message AlarmHistoryRequest {
+  string alarm_name = 1;  // Optional, if empty returns history of all alarms
+  int32 max_entries = 2;  // Maximum number of entries to return
+}
+
+message AlarmHistoryResponse {
+  repeated ProtoAlarmHistoryEntry entries = 1;
+  int32 total_entries = 2;
+}
+
+message ProtoAlarmHistoryEntry {
+  string alarm_name = 1;
+  string message = 2;
+  ProtoAlarmSeverity severity = 3;
+  string timestamp = 4;
+  bool was_acknowledged = 5;
+}
+
+message AlarmControlRequest {
+  string alarm_name = 1;
+}
+
+message AlarmControlResponse {
+  bool success = 1;
+  string message = 2;
+  bool previous_state = 3;
+}
+
+// ============================================================================
+// Log Manager Messages
+// ============================================================================
+
+message LogStatusRequest {
+  // Empty request to get current log status
+}
+
+message LogStatusResponse {
+  string current_log_file = 1;
+  int64 current_log_size = 2;
+  ProtoLogLevel current_log_level = 3;
+  int32 pending_log_entries = 4;
+  bool is_running = 5;
+}
+
+enum ProtoLogLevel {
+  PROTO_LOG_DEBUG = 0;
+  PROTO_LOG_INFO = 1;
+  PROTO_LOG_WARNING = 2;
+  PROTO_LOG_ERROR = 3;
+}
+
+message RecentLogsRequest {
+  int32 max_entries = 1;  // Maximum number of log entries to return
+  ProtoLogLevel min_level = 2;  // Minimum log level to include
+}
+
+message RecentLogsResponse {
+  repeated ProtoLogEntry entries = 1;
+  int32 total_entries = 2;
+}
+
+message ProtoLogEntry {
+  string timestamp = 1;
+  string level = 2;
+  string source = 3;
+  string message = 4;
+  string metadata = 5;  // JSON string
+}
+
+message LogLevelRequest {
+  ProtoLogLevel new_level = 1;
+}
+
+message LogLevelResponse {
+  bool success = 1;
+  string message = 2;
+  ProtoLogLevel previous_level = 3;
+  ProtoLogLevel current_level = 4;
+}
+
+message LogRotateRequest {
+  // Empty request to trigger log rotation
+}
+
+message LogRotateResponse {
+  bool success = 1;
+  string message = 2;
+  string new_log_file = 3;
+  string rotated_log_file = 4;
+}
+
+// ============================================================================
+// Common Messages
+// ============================================================================
+
+message FaultResponse {
+  bool success = 1;
+  string message = 2;
+  string current_state = 3;  // Current state after the operation
+} 

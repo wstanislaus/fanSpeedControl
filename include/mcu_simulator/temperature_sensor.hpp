@@ -114,6 +114,13 @@ public:
      */
     bool getNoisy() const { return is_noisy_; }
 
+    /**
+     * @brief Sets the simulation parameters
+     * @param start_temp Start temperature for simulation
+     * @param end_temp End temperature for simulation
+     * @param step_size Step size for simulation
+     */
+    void setSimulationParams(const double start_temp, const double end_temp, const double step_size);
 private:
     int id_;                                                    ///< Unique identifier for the sensor
     std::string name_;                                          ///< Name of the sensor

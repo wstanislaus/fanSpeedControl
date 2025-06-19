@@ -7,6 +7,7 @@ set(SOURCES
     temp_monitor_and_cooling.cpp
     log_manager.cpp
     alarm_manager.cpp
+    fan_control_system_server.cpp
 )
 
 # Create executable
@@ -27,6 +28,7 @@ target_link_libraries(fan_control_system PRIVATE
     pthread
     common
     stdc++fs
+    fan_control_system_proto
 )
 
 # Install targets
