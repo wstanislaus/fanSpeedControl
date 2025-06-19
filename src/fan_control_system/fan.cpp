@@ -20,9 +20,15 @@ namespace fan_control_system {
  * @param pwm_reg PWM register address for controlling fan speed
  * @param mqtt_settings MQTT client settings for publishing fan status
  * @param log_level Logging level for the fan
+ * @param pwm_min Minimum PWM value
+ * @param pwm_max Maximum PWM value
+ * @param duty_cycle_min Minimum duty cycle value
+ * @param duty_cycle_max Maximum duty cycle value
+ * @param noise_profile Noise profile mapping
  */
 Fan::Fan(const std::string& name, const std::string& model_name, uint8_t i2c_address, uint8_t pwm_reg,
-         const common::MQTTClient::Settings& mqtt_settings, const std::string& log_level)
+         const common::MQTTClient::Settings& mqtt_settings, const std::string& log_level,
+         int pwm_min, int pwm_max, int duty_cycle_min, int duty_cycle_max, const std::map<int, int>& noise_profile)
     : name_(name)
     , model_name_(model_name)
     , i2c_address_(i2c_address)
@@ -34,6 +40,12 @@ Fan::Fan(const std::string& name, const std::string& model_name, uint8_t i2c_add
     , last_update_time_(std::chrono::system_clock::now())
     , mqtt_settings_(mqtt_settings)
     , log_level_(log_level)
+    , pwm_min_(pwm_min)
+    , pwm_max_(pwm_max)
+    , duty_cycle_min_(duty_cycle_min)
+    , duty_cycle_max_(duty_cycle_max)
+    , noise_level_(0)
+    , noise_profile_(noise_profile)
 {
 }
 

@@ -290,9 +290,6 @@ void CLI::processFanCommand(const std::string& cmd, std::istringstream& iss) {
         }
     }
     // Temperature operations
-    else if (cmd == "get_temp_status") {
-        getTemperatureStatus();
-    }
     else if (cmd == "get_temp_history") {
         std::string mcu_name, sensor_id;
         int32_t max_readings;
@@ -423,7 +420,6 @@ void CLI::showFanHelp() {
     std::cout << "  get_fan_noise <fan_name>            - Get noise level" << std::endl;
     std::cout << std::endl;
     std::cout << "  # Temperature operations" << std::endl;
-    std::cout << "  get_temp_status                     - Get temperature status" << std::endl;
     std::cout << "  get_temp_history <mcu> <sensor> <count> - Get temperature history" << std::endl;
     std::cout << "  get_cooling_status                  - Get cooling status" << std::endl;
     std::cout << "  set_temp_thresholds <low> <high> <min_speed> <max_speed> - Set thresholds" << std::endl;
@@ -594,9 +590,33 @@ void CLI::setSensorNoise(const std::string& mcu_name, const std::string& sensor_
     }
 }
 
-// Fan Control System RPC implementations - TODO placeholders
+
 void CLI::getFanStatus(const std::string& fan_name) {
-    std::cout << "TODO: Implement getFanStatus for fan: " << fan_name << std::endl;
+    fan_control_system::FanStatusRequest request;
+    request.set_fan_name(fan_name);
+
+    fan_control_system::FanStatusResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->GetFanStatus(&context, request, &response);
+    if (status.ok()) {
+        for (const auto& fan : response.fans()) {
+            std::cout << "Fan: " << fan.name() << std::endl;
+            std::cout << "  Model: " << fan.model() << std::endl;
+            std::cout << "  Online: " << (fan.is_online() ? "Yes" : "No") << std::endl;
+            std::cout << "  Duty Cycle: " << fan.current_duty_cycle() << std::endl;
+            std::cout << "  PWM Count: " << fan.current_pwm() << std::endl;
+            std::cout << "  Noise Level (dB): " << fan.noise_level_db() << std::endl;
+            std::cout << "  Status: " << fan.status() << std::endl;
+            std::cout << "  Interface: " << fan.interface() << std::endl;
+            std::cout << "  I2C Address: 0x" << std::hex << fan.i2c_address() << std::dec << std::endl;
+            std::cout << "  PWM Range: " << fan.pwm_min() << "-" << fan.pwm_max() << std::endl;
+            std::cout << "  Duty Cycle Range: " << fan.duty_cycle_min() << "%-" << fan.duty_cycle_max() << "%" << std::endl;
+            std::cout << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::setFanSpeed(const std::string& fan_name, int32_t duty_cycle) {
@@ -621,10 +641,6 @@ void CLI::makeFanGood(const std::string& fan_name) {
 
 void CLI::getFanNoise(const std::string& fan_name) {
     std::cout << "TODO: Implement getFanNoise for fan: " << fan_name << std::endl;
-}
-
-void CLI::getTemperatureStatus() {
-    std::cout << "TODO: Implement getTemperatureStatus" << std::endl;
 }
 
 void CLI::getTemperatureHistory(const std::string& mcu_name, const std::string& sensor_id, int32_t max_readings) {

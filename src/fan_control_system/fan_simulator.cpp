@@ -137,6 +137,16 @@ bool FanSimulator::set_fan_speed(int duty_cycle) {
     return true;
 }
 
+bool FanSimulator::set_fan_speed(const std::string& fan_name, int duty_cycle) {
+    auto it = fans_.find(fan_name);
+    if (it == fans_.end()) {
+        logger_->warning("Attempted to set speed for non-existent fan: " + fan_name);
+        return false;
+    }
+    int pwm_count = duty_cycle_to_pwm(it->second->getModelName(), duty_cycle);
+    return it->second->setPwmCount(duty_cycle, pwm_count);
+}
+
 /**
  * @brief Gets the current speed of a specific fan
  * 
@@ -302,7 +312,10 @@ bool FanSimulator::create_fans() {
             }
 
             auto fan = std::make_shared<Fan>(name, model_name, i2c_address, 
-                                           model_it->second.pwm_reg, mqtt_settings_, log_level_);
+                                           model_it->second.pwm_reg, mqtt_settings_, log_level_
+                                           , model_it->second.pwm_min, model_it->second.pwm_max
+                                           , model_it->second.duty_cycle_min, model_it->second.duty_cycle_max
+                                           , model_it->second.noise_profile);
             fans_[name] = fan;
             logger_->debug("Created fan instance: " + name + " (Model: " + model_name + ")");
             if (fan_count >= max_fan_controllers) {
@@ -394,4 +407,22 @@ void FanSimulator::main_thread_function() {
     logger_->info("Fan Simulator main thread stopped");
 }
 
+bool FanSimulator::set_fan_pwm(const std::string& fan_name, int pwm_count) {
+    auto it = fans_.find(fan_name);
+    if (it == fans_.end()) {
+        logger_->warning("Attempted to set PWM for non-existent fan: " + fan_name);
+        return false;
+    }
+    int duty_cycle = pwm_to_duty_cycle(it->second->getModelName(), pwm_count);
+    return it->second->setPwmCount(duty_cycle, pwm_count);
+}
+
+int FanSimulator::get_fan_noise_level(const std::string& fan_name) const {
+    auto it = fans_.find(fan_name);
+    if (it == fans_.end()) {
+        logger_->warning("Attempted to get noise level for non-existent fan: " + fan_name);
+        return -1;
+    }
+    return it->second->getNoiseLevel();
+}
 } // namespace fan_control_system 

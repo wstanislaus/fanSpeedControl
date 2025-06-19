@@ -82,7 +82,6 @@ The Fan Control System provides a comprehensive gRPC interface for testing and d
 - `GetFanNoiseLevel`: Get current noise level and category
 
 #### Temperature Monitor Operations:
-- `GetTemperatureStatus`: Get current temperature readings from all sensors
 - `GetTemperatureHistory`: Retrieve historical temperature data
 - `SetTemperatureThresholds`: Configure temperature thresholds for fan control
 - `GetCoolingStatus`: Get overall cooling system status
@@ -204,7 +203,7 @@ The MCU Simulator includes a debug CLI application that provides interactive tes
 #### Starting the Debug CLI
 ```bash
 # Start the debug CLI application
-debug_cli [optional config.yaml]
+debug_cli
 
 ```
 

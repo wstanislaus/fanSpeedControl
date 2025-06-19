@@ -126,6 +126,34 @@ public:
      */
     bool make_fan_good(const std::string& name);
 
+    /**
+     * @brief Gets all fans
+     * @return Map of fan names to shared pointers to all fans
+     */
+    const std::map<std::string, std::shared_ptr<Fan>>& get_fans() const { return fans_; }
+
+    /**
+     * @brief Sets the fan speed for a specific fan
+     * @param fan_name Name of the fan to set the speed for
+     * @param duty_cycle Duty cycle percentage (0-100)
+     * @return true if the operation was successful, false otherwise
+     */
+    bool set_fan_speed(const std::string& fan_name, int duty_cycle);
+
+    /**
+     * @brief Sets the fan PWM for a specific fan
+     * @param fan_name Name of the fan to set the PWM for
+     * @param pwm_count PWM count value
+     * @return true if the operation was successful, false otherwise
+     */
+    bool set_fan_pwm(const std::string& fan_name, int pwm_count);
+
+    /**
+     * @brief Gets the noise level for a specific fan
+     * @param fan_name Name of the fan to get the noise level for
+     * @return Noise level in decibels
+     */
+    int get_fan_noise_level(const std::string& fan_name) const;
 private:
     /**
      * @brief Initializes MQTT connection and components

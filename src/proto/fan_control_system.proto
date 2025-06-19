@@ -13,7 +13,6 @@ service FanControlSystemService {
   rpc GetFanNoiseLevel (FanNoiseRequest) returns (FanNoiseResponse) {}
   
   // Temperature Monitor operations
-  rpc GetTemperatureStatus (TemperatureStatusRequest) returns (TemperatureStatusResponse) {}
   rpc GetTemperatureHistory (TemperatureHistoryRequest) returns (TemperatureHistoryResponse) {}
   rpc SetTemperatureThresholds (TemperatureThresholdsRequest) returns (TemperatureThresholdsResponse) {}
   rpc GetCoolingStatus (CoolingStatusRequest) returns (CoolingStatusResponse) {}
@@ -111,29 +110,6 @@ message FanNoiseResponse {
 // ============================================================================
 // Temperature Monitor Messages
 // ============================================================================
-
-message TemperatureStatusRequest {
-  string mcu_name = 1;  // Optional, if empty returns status of all MCUs
-  int32 sensor_id = 2;  // Optional, if 0 returns status of all sensors
-}
-
-message TemperatureStatusResponse {
-  repeated MCUTemperatureStatus mcu_status = 1;
-}
-
-message MCUTemperatureStatus {
-  string mcu_name = 1;
-  bool is_online = 2;
-  repeated SensorTemperatureStatus sensors = 3;
-}
-
-message SensorTemperatureStatus {
-  int32 sensor_id = 1;
-  double current_temperature = 2;
-  string status = 3;  // "GOOD", "BAD", "NOISY"
-  string timestamp = 4;
-  bool is_active = 5;
-}
 
 message TemperatureHistoryRequest {
   string mcu_name = 1;

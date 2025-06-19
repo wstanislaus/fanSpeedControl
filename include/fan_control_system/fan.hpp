@@ -30,7 +30,8 @@ public:
      * @param log_level Logging level for the fan
      */
     Fan(const std::string& name, const std::string& model_name, uint8_t i2c_address, uint8_t pwm_reg,
-        const common::MQTTClient::Settings& mqtt_settings, const std::string& log_level);
+        const common::MQTTClient::Settings& mqtt_settings, const std::string& log_level,
+        int pwm_min, int pwm_max, int duty_cycle_min, int duty_cycle_max, const std::map<int, int>& noise_profile);
 
     /**
      * @brief Destructor that ensures proper cleanup
@@ -81,6 +82,55 @@ public:
      * @return Current duty cycle (0-100)
      */
     int getDutyCycle() const { return current_pwm_count_; }
+
+    /**
+     * @brief Gets the current PWM count of the fan
+     * @return Current PWM count
+     */
+    int getPWMCount() const { return current_pwm_count_; }
+
+    /**
+     * @brief Gets the current noise level of the fan
+     * @return Current noise level (0-100)
+     */
+    int getNoiseLevel() const { return noise_level_; }
+
+    /**
+     * @brief Gets the I2C address of the fan
+     * @return I2C address
+     */
+    uint8_t getI2CAddress() const { return i2c_address_; }
+
+    /**
+     * @brief Gets the PWM register address of the fan
+     * @return PWM register address
+     */
+    uint8_t getPWMRegister() const { return pwm_reg_; }
+
+    /**
+     * @brief Gets the PWM minimum value of the fan
+     * @return PWM minimum value
+     */
+    int getPWMMin() const { return pwm_min_; }
+
+    /**
+     * @brief Gets the PWM maximum value of the fan
+     * @return PWM maximum value
+     */
+    int getPWMMax() const { return pwm_max_; }
+
+    /**
+     * @brief Gets the duty cycle minimum value of the fan
+     * @return Duty cycle minimum value
+     */
+    int getDutyCycleMin() const { return duty_cycle_min_; }
+
+    /**
+    /**
+     * @brief Gets the duty cycle maximum value of the fan
+     * @return Duty cycle maximum value
+     */
+    int getDutyCycleMax() const { return duty_cycle_max_; }
 
     /**
      * @brief Sets the duty cycle of the fan
@@ -143,6 +193,12 @@ private:
     std::unique_ptr<common::Alarm> alarm_;                      ///< Alarm system for fan-level alerts
     common::MQTTClient::Settings mqtt_settings_;                ///< MQTT communication settings
     std::string log_level_;                                      ///< Log level for the fan
+    int pwm_min_;                                                ///< PWM minimum value
+    int pwm_max_;                                                ///< PWM maximum value
+    int duty_cycle_min_;                                         ///< Duty cycle minimum value
+    int duty_cycle_max_;                                         ///< Duty cycle maximum value
+    int noise_level_;                                            ///< Noise level
+    std::map<int, int> noise_profile_;                            ///< Noise profile
 };
 
 } // namespace fan_control_system 

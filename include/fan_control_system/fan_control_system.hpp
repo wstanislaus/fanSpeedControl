@@ -56,6 +56,12 @@ public:
      */
     bool is_running() const { return running_; }
 
+    /**
+     * @brief Gets the fan simulator component
+     * @return Shared pointer to the fan simulator
+     */
+    std::shared_ptr<fan_control_system::FanSimulator> get_fan_simulator() const { return fan_simulator_; }
+
 private:
     /**
      * @brief Initializes all system components

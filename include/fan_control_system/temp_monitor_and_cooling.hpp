@@ -176,6 +176,9 @@ private:
     int update_interval_ms_{1000};                       ///< Update interval in milliseconds
     std::chrono::minutes history_duration_{10};          ///< Duration to keep temperature history
 
+    // Temperature status
+    std::map<std::string, int> temperature_status_;       ///< Temperature status for each fan
+
     // Name
     std::string name_;                                    ///< Name of the temperature monitor
 };

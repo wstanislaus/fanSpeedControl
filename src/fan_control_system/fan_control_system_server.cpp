@@ -1,4 +1,5 @@
 #include "fan_control_system/fan_control_system_server.hpp"
+#include "fan_control_system/fan_simulator.hpp"
 #include <iostream>
 #include "common/config.hpp"
 
@@ -12,60 +13,128 @@ FanControlSystemServiceImpl::FanControlSystemServiceImpl(FanControlSystem& syste
 grpc::Status FanControlSystemServiceImpl::GetFanStatus(grpc::ServerContext* context, 
                                                       const FanStatusRequest* request,
                                                       FanStatusResponse* response) {
-    // TODO: Implement GetFanStatus
-    std::cout << "TODO: Implement GetFanStatus" << std::endl;
+    const auto& fan_simulator = system_.get_fan_simulator();
+    if (!fan_simulator) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fan simulator not available");
+    }
+    if (request->fan_name().empty()) {
+        // Return status of all fans
+        for (const auto& fan_pair : fan_simulator->get_fans()) {
+            auto* fan_status = response->add_fans();
+            fan_status->set_name(fan_pair.second->getName());
+            fan_status->set_model(fan_pair.second->getModelName());
+            fan_status->set_is_online(fan_pair.second->getStatus() != "Bad");
+            fan_status->set_current_duty_cycle(fan_pair.second->getDutyCycle());
+            fan_status->set_current_pwm(fan_pair.second->getPWMCount());
+            fan_status->set_noise_level_db(fan_pair.second->getNoiseLevel());
+            fan_status->set_status(fan_pair.second->getStatus());
+            fan_status->set_interface(fan_pair.second->getModelName());
+            fan_status->set_i2c_address(fan_pair.second->getI2CAddress());
+            fan_status->set_pwm_min(fan_pair.second->getPWMMin());
+            fan_status->set_pwm_max(fan_pair.second->getPWMMax());
+            fan_status->set_duty_cycle_min(fan_pair.second->getDutyCycleMin());
+            fan_status->set_duty_cycle_max(fan_pair.second->getDutyCycleMax());
+        }
+    } else {
+        // Return status of specific fan
+        auto fan = fan_simulator->get_fan(request->fan_name());
+        if (!fan) {
+            return grpc::Status(grpc::StatusCode::NOT_FOUND, "Fan not found: " + request->fan_name());
+        }
+        auto* fan_status = response->add_fans();
+        fan_status->set_name(fan->getName());
+        fan_status->set_model(fan->getModelName());
+        fan_status->set_is_online(fan->getStatus() != "Bad");
+        fan_status->set_current_duty_cycle(fan->getDutyCycle());
+        fan_status->set_current_pwm(fan->getPWMCount());
+        fan_status->set_noise_level_db(fan->getNoiseLevel());
+        fan_status->set_status(fan->getStatus());
+        fan_status->set_interface(fan->getModelName());
+        fan_status->set_i2c_address(fan->getI2CAddress());
+        fan_status->set_pwm_min(fan->getPWMMin());
+        fan_status->set_pwm_max(fan->getPWMMax());
+        fan_status->set_duty_cycle_min(fan->getDutyCycleMin());
+        fan_status->set_duty_cycle_max(fan->getDutyCycleMax());
+    }
     return grpc::Status::OK;
 }
 
 grpc::Status FanControlSystemServiceImpl::SetFanSpeed(grpc::ServerContext* context,
                                                      const FanSpeedRequest* request,
                                                      FanSpeedResponse* response) {
-    // TODO: Implement SetFanSpeed
-    std::cout << "TODO: Implement SetFanSpeed" << std::endl;
+    const auto& fan_simulator = system_.get_fan_simulator();
+    if (!fan_simulator) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fan simulator not available");
+    }
+    if (!fan_simulator->set_fan_speed(request->fan_name(), request->duty_cycle())) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Failed to set fan speed");
+    }
+    response->set_success(true);
+    response->set_message("Fan speed set successfully");
     return grpc::Status::OK;
 }
 
 grpc::Status FanControlSystemServiceImpl::MakeFanBad(grpc::ServerContext* context,
                                                     const FanFaultRequest* request,
                                                     FaultResponse* response) {
-    // TODO: Implement MakeFanBad
-    std::cout << "TODO: Implement MakeFanBad" << std::endl;
+    const auto& fan_simulator = system_.get_fan_simulator();
+    if (!fan_simulator) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fan simulator not available");
+    }
+    if (!fan_simulator->make_fan_bad(request->fan_name())) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Failed to make fan bad");
+    }
+    response->set_success(true);
+    response->set_message("Fan made bad successfully");
     return grpc::Status::OK;
 }
 
 grpc::Status FanControlSystemServiceImpl::MakeFanGood(grpc::ServerContext* context,
                                                      const FanFaultRequest* request,
                                                      FaultResponse* response) {
-    // TODO: Implement MakeFanGood
-    std::cout << "TODO: Implement MakeFanGood" << std::endl;
+    const auto& fan_simulator = system_.get_fan_simulator();
+    if (!fan_simulator) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fan simulator not available");
+    }
+    if (!fan_simulator->make_fan_good(request->fan_name())) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Failed to make fan good");
+    }
+    response->set_success(true);
+    response->set_message("Fan made good successfully");
     return grpc::Status::OK;
 }
 
 grpc::Status FanControlSystemServiceImpl::SetFanPWM(grpc::ServerContext* context,
                                                    const FanPWMRequest* request,
                                                    FanPWMResponse* response) {
-    // TODO: Implement SetFanPWM
-    std::cout << "TODO: Implement SetFanPWM" << std::endl;
+    const auto& fan_simulator = system_.get_fan_simulator();
+    if (!fan_simulator) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fan simulator not available");
+    }
+    if (!fan_simulator->set_fan_pwm(request->fan_name(), request->pwm_count())) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Failed to set fan PWM");
+    }
+    response->set_success(true);
+    response->set_message("Fan PWM set successfully");
     return grpc::Status::OK;
 }
 
 grpc::Status FanControlSystemServiceImpl::GetFanNoiseLevel(grpc::ServerContext* context,
                                                           const FanNoiseRequest* request,
                                                           FanNoiseResponse* response) {
-    // TODO: Implement GetFanNoiseLevel
-    std::cout << "TODO: Implement GetFanNoiseLevel" << std::endl;
+    const auto& fan_simulator = system_.get_fan_simulator();
+    if (!fan_simulator) {
+        return grpc::Status(grpc::StatusCode::INTERNAL, "Fan simulator not available");
+    }
+    int noise_level = fan_simulator->get_fan_noise_level(request->fan_name());
+    if (noise_level == -1) {
+        return grpc::Status(grpc::StatusCode::NOT_FOUND, "Fan not found: " + request->fan_name());
+    }
+    response->set_noise_level_db(noise_level);
     return grpc::Status::OK;
 }
 
 // Temperature Monitor operations
-grpc::Status FanControlSystemServiceImpl::GetTemperatureStatus(grpc::ServerContext* context,
-                                                              const TemperatureStatusRequest* request,
-                                                              TemperatureStatusResponse* response) {
-    // TODO: Implement GetTemperatureStatus
-    std::cout << "TODO: Implement GetTemperatureStatus" << std::endl;
-    return grpc::Status::OK;
-}
-
 grpc::Status FanControlSystemServiceImpl::GetTemperatureHistory(grpc::ServerContext* context,
                                                                const TemperatureHistoryRequest* request,
                                                                TemperatureHistoryResponse* response) {

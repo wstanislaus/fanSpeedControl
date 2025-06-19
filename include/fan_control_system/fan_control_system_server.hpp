@@ -39,10 +39,6 @@ public:
                                 FanNoiseResponse* response) override;
 
     // Temperature Monitor operations
-    grpc::Status GetTemperatureStatus(grpc::ServerContext* context,
-                                    const TemperatureStatusRequest* request,
-                                    TemperatureStatusResponse* response) override;
-
     grpc::Status GetTemperatureHistory(grpc::ServerContext* context,
                                      const TemperatureHistoryRequest* request,
                                      TemperatureHistoryResponse* response) override;

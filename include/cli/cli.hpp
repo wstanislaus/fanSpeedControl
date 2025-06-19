@@ -62,7 +62,6 @@ private:
     void makeFanGood(const std::string& fan_name);
     void getFanNoise(const std::string& fan_name);
     
-    void getTemperatureStatus();
     void getTemperatureHistory(const std::string& mcu_name, const std::string& sensor_id, int32_t max_readings);
     void getCoolingStatus();
     void setTemperatureThresholds(double temp_low, double temp_high, int32_t fan_speed_min, int32_t fan_speed_max);
