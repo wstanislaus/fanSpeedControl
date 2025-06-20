@@ -2,6 +2,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <nlohmann/json.hpp>
+#include <iomanip>
+#include <sstream>
 
 namespace fan_control_system {
 
@@ -9,7 +11,7 @@ namespace fan_control_system {
  * @brief Constructs a new AlarmManager instance
  * 
  * Initializes the alarm manager with configuration and MQTT settings.
- * Loads alarm configurations from the YAML config.
+ * Loads alarm configurations and severity actions from the YAML config.
  * 
  * @param config YAML configuration node containing alarm settings
  * @param mqtt_settings MQTT client settings for publishing alarms
@@ -18,6 +20,7 @@ namespace fan_control_system {
 AlarmManager::AlarmManager(const YAML::Node& config, const common::MQTTClient::Settings& mqtt_settings)
     : config_(config), mqtt_settings_(mqtt_settings) {
     name_ = "AlarmManager";
+    
     if (!load_alarm_configs()) {
         throw std::runtime_error("Failed to initialize alarm manager");
     }
@@ -75,11 +78,12 @@ void AlarmManager::stop() {
  * Processes the alarm according to its configuration, executes associated actions,
  * and publishes the alarm to MQTT.
  * 
- * @param alarm_name Name of the alarm to raise
+ * @param alarm_source Source of the alarm
+ * @param severity Severity of the alarm
  * @param message Description of the alarm condition
  */
-void AlarmManager::raise_alarm(const std::string& alarm_name, const std::string& message) {
-    process_alarm(alarm_name, message);
+void AlarmManager::raise_alarm(const std::string& alarm_source, AlarmSeverity severity, const std::string& message) {
+    process_alarm(alarm_source, severity, message);
 }
 
 /**
@@ -92,23 +96,111 @@ void AlarmManager::register_action(
     const std::string& action_name,
     std::function<void(const std::string&, const std::string&)> callback) {
     std::lock_guard<std::mutex> lock(config_mutex_);
-    alarm_actions_[action_name] = AlarmAction{action_name, callback};
+    action_callbacks_[action_name] = callback;
 }
 
 /**
- * @brief Gets the configuration for a specific alarm
+ * @brief Gets the configuration for the alarm system
  * 
- * @param alarm_name Name of the alarm
  * @return Reference to the alarm configuration
- * @throw std::runtime_error if alarm configuration not found
  */
-const AlarmConfig& AlarmManager::get_alarm_config(const std::string& alarm_name) const {
+const AlarmConfig& AlarmManager::get_alarm_config() const {
     std::lock_guard<std::mutex> lock(config_mutex_);
-    auto it = alarm_configs_.find(alarm_name);
-    if (it == alarm_configs_.end()) {
-        throw std::runtime_error("Alarm configuration not found: " + alarm_name);
+    return alarm_config_;
+}
+
+// CLI Debugging and Testing APIs Implementation
+
+std::vector<AlarmEntry> AlarmManager::get_alarm_history(const std::string& alarm_name, int max_entries) const {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    std::vector<AlarmEntry> result;
+    
+    for (const auto& entry : alarm_history_) {
+        if (alarm_name.empty() || entry.name == alarm_name) {
+            result.push_back(entry);
+            if (max_entries > 0 && result.size() >= static_cast<size_t>(max_entries)) {
+                break;
+            }
+        }
     }
-    return it->second;
+    
+    return result;
+}
+
+int AlarmManager::clear_alarm_history(const std::string& alarm_name) {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    int cleared_count = 0;
+    
+    if (alarm_name.empty()) {
+        cleared_count = alarm_history_.size();
+        alarm_history_.clear();
+    } else {
+        auto it = alarm_history_.begin();
+        while (it != alarm_history_.end()) {
+            if (it->name == alarm_name) {
+                it = alarm_history_.erase(it);
+                cleared_count++;
+            } else {
+                ++it;
+            }
+        }
+    }
+    
+    return cleared_count;
+}
+
+std::vector<AlarmStatistics> AlarmManager::get_alarm_statistics(const std::string& alarm_name, int time_window_hours) const {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    std::map<std::string, AlarmStatistics> stats_map;
+    
+    auto now = std::chrono::system_clock::now();
+    auto window_duration = std::chrono::hours(time_window_hours);
+    
+    for (const auto& entry : alarm_history_) {
+        // Parse timestamp and check if within time window
+        std::tm tm = {};
+        std::istringstream ss(entry.timestamp);
+        ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+        auto entry_time = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+        
+        if (now - entry_time > window_duration) {
+            continue; // Skip entries outside time window
+        }
+        
+        if (!alarm_name.empty() && entry.name != alarm_name) {
+            continue; // Skip if filtering by specific alarm
+        }
+        
+        auto& stats = stats_map[entry.name];
+        stats.alarm_name = entry.name;
+        stats.total_count++;
+        
+        if (entry.is_active) {
+            stats.active_count++;
+        }
+        
+        if (entry.acknowledged) {
+            stats.acknowledged_count++;
+        }
+        
+        std::string severity_str = severity_to_string(entry.severity);
+        stats.severity_counts[severity_str]++;
+        
+        if (stats.last_occurrence.empty() || entry.timestamp > stats.last_occurrence) {
+            stats.last_occurrence = entry.timestamp;
+        }
+        
+        if (stats.first_occurrence.empty() || entry.timestamp < stats.first_occurrence) {
+            stats.first_occurrence = entry.timestamp;
+        }
+    }
+    
+    std::vector<AlarmStatistics> result;
+    for (const auto& pair : stats_map) {
+        result.push_back(pair.second);
+    }
+    
+    return result;
 }
 
 /**
@@ -130,7 +222,7 @@ bool AlarmManager::initialize() {
     logger_ = std::make_unique<common::Logger>(name_, log_level, mqtt_client_);
     logger_->info("Alarm Manager initialized successfully");
 
-    // Subscribe to alarm topics
+    // Subscribe to alarm topics from other modules
     mqtt_client_->subscribe("alarms/#", 0);
 
     // Register message callback
@@ -150,6 +242,38 @@ void AlarmManager::mqtt_message_callback(
     struct mosquitto* mosq, void* obj, const struct mosquitto_message* msg) {
     auto* manager = static_cast<AlarmManager*>(obj);
     if (!manager) return;
+    
+    std::string topic(reinterpret_cast<const char*>(msg->topic));
+    std::string payload(reinterpret_cast<const char*>(msg->payload), msg->payloadlen);
+    
+    manager->process_mqtt_alarm_message(topic, payload);
+}
+
+/**
+ * @brief Processes incoming MQTT alarm messages
+ * 
+ * @param topic MQTT topic
+ * @param payload Message payload
+ */
+void AlarmManager::process_mqtt_alarm_message(const std::string& topic, const std::string& payload) {
+    try {
+        nlohmann::json alarm_json = nlohmann::json::parse(payload);
+        
+        // Extract fields from the actual alarm message format
+        std::string source = alarm_json.value("source", "");
+        std::string message = alarm_json.value("message", "");
+        std::string state = alarm_json.value("state", "");
+        int severity_int = alarm_json.value("severity", 0);
+        std::string timestamp = alarm_json.value("timestamp", "");
+        
+        // Only process raised alarms (not cleared ones)
+        if (state == "raised" && !source.empty() && !message.empty()) {
+            AlarmSeverity severity = static_cast<AlarmSeverity>(severity_int);
+            process_alarm(source, severity, message);
+        }
+    } catch (const std::exception& e) {
+        logger_->error("Failed to process MQTT alarm message: " + std::string(e.what()));
+    }
 }
 
 /**
@@ -162,28 +286,25 @@ void AlarmManager::mqtt_message_callback(
  */
 bool AlarmManager::load_alarm_configs() {
     try {
-
         const auto& alarms = config_["Alarms"];
-        for (const auto& alarm : alarms) {
-            AlarmConfig config;
-            config.name = alarm.first.as<std::string>();
+        
+        // Load alarm history size
+        alarm_config_.alarm_history_size = alarms["AlarmHistory"].as<int>();
+        max_history_entries_ = alarm_config_.alarm_history_size;
+        
+        // Load severity actions
+        const auto& severity_actions = alarms["SeverityActions"];
+        for (const auto& severity : severity_actions) {
+            std::string severity_name = severity.first.as<std::string>();
+            std::vector<std::string> actions;
             
-            std::string severity_str = alarm.second["Severity"].as<std::string>();
-            if (severity_str == "INFO") config.severity = AlarmSeverity::INFO;
-            else if (severity_str == "WARNING") config.severity = AlarmSeverity::WARNING;
-            else if (severity_str == "ERROR") config.severity = AlarmSeverity::ERROR;
-            else if (severity_str == "CRITICAL") config.severity = AlarmSeverity::CRITICAL;
-            
-            config.description = alarm.second["Description"].as<std::string>();
-            config.enabled = alarm.second["Enabled"].as<bool>();
-
-            // Load actions
-            for (const auto& action : alarm.second["Actions"]) {
-                config.actions.push_back(action.as<std::string>());
+            for (const auto& action : severity.second) {
+                actions.push_back(action.as<std::string>());
             }
-
-            alarm_configs_[config.name] = config;
+            
+            alarm_config_.severity_actions[severity_name] = actions;
         }
+        
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Error loading alarm configurations: " << e.what() << std::endl;
@@ -200,38 +321,33 @@ bool AlarmManager::load_alarm_configs() {
  * @param alarm_name Name of the alarm to process
  * @param message Description of the alarm condition
  */
-void AlarmManager::process_alarm(const std::string& alarm_name, const std::string& message) {
+void AlarmManager::process_alarm(const std::string& alarm_source, AlarmSeverity severity, const std::string& message) {
     std::lock_guard<std::mutex> lock(config_mutex_);
+
+    // Execute severity-based actions
+    execute_severity_actions(severity, alarm_source, message);
+
+    // Create alarm entry for runtime database
+    AlarmEntry entry;
+    entry.name = alarm_source;
+    entry.message = message;
+    entry.severity = severity;
+    entry.is_active = true;
+    entry.acknowledged = false;
     
-    auto it = alarm_configs_.find(alarm_name);
-    if (it == alarm_configs_.end() || !it->second.enabled) {
-        return;
-    }
+    // Generate timestamp
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+    entry.timestamp = ss.str();
 
-    const auto& config = it->second;
-
-    // Execute actions
-    for (const auto& action_name : config.actions) {
-        auto action_it = alarm_actions_.find(action_name);
-        if (action_it != alarm_actions_.end()) {
-            action_it->second.callback(alarm_name, message);
-        }
-    }
-
-    // Publish alarm to MQTT
-    nlohmann::json alarm_json = {
-        {"alarm", alarm_name},
-        {"severity", static_cast<int>(config.severity)},
-        {"message", message},
-        {"timestamp", std::chrono::system_clock::now().time_since_epoch().count()}
-    };
-
-    std::string topic = "alarms/" + alarm_name;
-    mqtt_client_->publish(topic, alarm_json.dump());
+    // Add to runtime database
+    add_alarm_entry(entry);
 
     // Log the alarm
-    std::string log_message = "Alarm raised: " + alarm_name + " - " + message;
-    switch (config.severity) {
+    std::string log_message = "Alarm Processed: " + alarm_source + " - " + message;
+    switch (severity) {
         case AlarmSeverity::INFO:
             logger_->info(log_message);
             break;
@@ -248,6 +364,44 @@ void AlarmManager::process_alarm(const std::string& alarm_name, const std::strin
 }
 
 /**
+ * @brief Executes actions for a specific severity level
+ * 
+ * @param severity Severity level
+ * @param alarm_source Source of the alarm
+ * @param message Alarm message
+ */
+void AlarmManager::execute_severity_actions(AlarmSeverity severity, const std::string& alarm_source, const std::string& message) {
+    std::string severity_str = severity_to_string(severity);
+    auto it = alarm_config_.severity_actions.find(severity_str);
+    
+    if (it != alarm_config_.severity_actions.end()) {
+        for (const auto& action_name : it->second) {
+            auto action_it = action_callbacks_.find(action_name);
+            if (action_it != action_callbacks_.end()) {
+                action_it->second(alarm_source, message);
+                logger_->info("Executed action: " + action_name + " for alarm: " + alarm_source);
+            }
+        }
+    }
+}
+
+/**
+ * @brief Adds an alarm entry to the runtime database
+ * 
+ * @param entry Alarm entry to add
+ */
+void AlarmManager::add_alarm_entry(const AlarmEntry& entry) {
+    std::lock_guard<std::mutex> lock(history_mutex_);
+    
+    alarm_history_.push_back(entry);
+    
+    // Maintain maximum history size
+    while (alarm_history_.size() > static_cast<size_t>(max_history_entries_)) {
+        alarm_history_.pop_front();
+    }
+}
+
+/**
  * @brief Main thread function for the alarm manager
  * 
  * Runs in a loop while the alarm manager is active, handling any background tasks.
@@ -256,6 +410,41 @@ void AlarmManager::main_thread_function() {
     while (running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
+}
+
+/**
+ * @brief Converts severity enum to string
+ * 
+ * @param severity Severity enum
+ * @return String representation
+ */
+std::string AlarmManager::severity_to_string(AlarmSeverity severity) {
+    switch (severity) {
+        case AlarmSeverity::INFO: return "INFO";
+        case AlarmSeverity::WARNING: return "WARNING";
+        case AlarmSeverity::ERROR: return "ERROR";
+        case AlarmSeverity::CRITICAL: return "CRITICAL";
+        default: return "UNKNOWN";
+    }
+}
+
+/**
+ * @brief Converts string to severity enum
+ * 
+ * @param severity_str String representation
+ * @return Severity enum
+ */
+AlarmSeverity AlarmManager::string_to_severity(const std::string& severity_str) {
+    if (severity_str == "INFO") return AlarmSeverity::INFO;
+    if (severity_str == "WARNING") return AlarmSeverity::WARNING;
+    if (severity_str == "ERROR") return AlarmSeverity::ERROR;
+    if (severity_str == "CRITICAL") return AlarmSeverity::CRITICAL;
+    return AlarmSeverity::INFO; // Default to INFO
+}
+
+std::map<std::string, std::vector<std::string>> AlarmManager::get_severity_actions() const {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    return alarm_config_.severity_actions;
 }
 
 } // namespace fan_control_system 

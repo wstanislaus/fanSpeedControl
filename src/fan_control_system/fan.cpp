@@ -46,6 +46,7 @@ Fan::Fan(const std::string& name, const std::string& model_name, uint8_t i2c_add
     , duty_cycle_max_(duty_cycle_max)
     , noise_level_(0)
     , noise_profile_(noise_profile)
+    , interface_("I2C")
 {
 }
 
@@ -169,6 +170,17 @@ bool Fan::setPwmCount(int duty_cycle, int pwm_count) {
 
     current_pwm_count_ = pwm_count;
     current_duty_cycle_ = duty_cycle;
+    // Update noise level, is not exactly as duty_cycle, but it is a range of duty_cycle
+    // so we need to find the closest noise level
+    int closest_noise_level = 0;
+    for (const auto& pair : noise_profile_) {
+        if (pair.first >= duty_cycle) {
+            closest_noise_level = pair.second;
+            break;
+        }
+    }
+    noise_level_ = closest_noise_level;
+    logger_->debug("Noise level set to " + std::to_string(noise_level_) + " for duty cycle " + std::to_string(duty_cycle) + "%");
     publishStatus();
     logger_->info("Pwm count set to " + std::to_string(pwm_count) + " for duty cycle " + std::to_string(duty_cycle) + "%");
     return true;

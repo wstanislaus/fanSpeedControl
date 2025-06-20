@@ -179,7 +179,7 @@ TemperatureMonitor:
   MaxTemp: 75.0
   MinDutyCycle: 20
   MaxDutyCycle: 100
-  UpdateIntervalMs: 2000
+  UpdateIntervalMs: 2000 # Update every 2 seconds
 
 # Logging Configuration
 Logging:
@@ -199,45 +199,12 @@ AppLogLevel:
 
 # Alarm Configuration
 Alarms:
-  Alarm001:
-    Severity: ERROR
-    Description: "Temperature is too low"
-    Enabled: true
-    Actions:
-      - "SendEmail"
-  Alarm002:
-    Severity: ERROR
-    Description: "Temperature is too high"
-    Enabled: true
-    Actions:
-      - "SendEmail"
-  Alarm003:
-    Severity: CRITICAL
-    Description: "Temperature is too high for more than an hour"
-    Enabled: true
-    Actions:
-      - "SendEmail"
-      - "Shutdown"
-  Alarm004:
-    Severity: CRITICAL
-    Description: "MCU has more than half of its sensors bad"
-    Enabled: true
-    Actions:
-      - "SendEmail"
-      - "Shutdown"
-  Alarm005:
-    Severity: ERROR
-    Description: "Fan is not working"
-    Enabled: true
-    Actions:
-      - "SendEmail"
-  Alarm006:
-    Severity: CRITICAL
-    Description: "Most of the fans are not working"
-    Enabled: true
-    Actions:
-      - "SendEmail"
-      - "Shutdown"
+  AlarmHistory: 100
+  SeverityActions:
+    INFO: ["LogEvent", "SendNotification"]
+    WARNING: ["LogEvent", "SendNotification", "IncreaseFanSpeed"]
+    ERROR: ["LogEvent", "SendNotification", "IncreaseFanSpeed", "SendEmail"]
+    CRITICAL: ["LogEvent", "SendNotification", "MaxFanSpeed", "SendEmail", "EmergencyShutdown"]
 
 AlarmTriggers:
   CriticalTemp: 80.0

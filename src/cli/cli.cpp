@@ -315,9 +315,6 @@ void CLI::processFanCommand(const std::string& cmd, std::istringstream& iss) {
         getTemperatureThresholds();
     }
     // Alarm operations
-    else if (cmd == "get_alarm_status") {
-        getAlarmStatus();
-    }
     else if (cmd == "raise_alarm") {
         std::string alarm_name, message, severity;
         if (iss >> alarm_name >> message >> severity) {
@@ -334,49 +331,24 @@ void CLI::processFanCommand(const std::string& cmd, std::istringstream& iss) {
             std::cout << "Usage: get_alarm_history <count>" << std::endl;
         }
     }
-    else if (cmd == "enable_alarm") {
+    else if (cmd == "clear_alarm_history") {
         std::string alarm_name;
         if (iss >> alarm_name) {
-            enableAlarm(alarm_name);
+            clearAlarmHistory(alarm_name);
         } else {
-            std::cout << "Usage: enable_alarm <name>" << std::endl;
+            clearAlarmHistory(); // Clear all alarm history
         }
     }
-    else if (cmd == "disable_alarm") {
+    else if (cmd == "get_alarm_statistics") {
         std::string alarm_name;
-        if (iss >> alarm_name) {
-            disableAlarm(alarm_name);
+        int32_t time_window_hours;
+        if (iss >> alarm_name >> time_window_hours) {
+            getAlarmStatistics(alarm_name, time_window_hours);
+        } else if (iss >> alarm_name) {
+            getAlarmStatistics(alarm_name); // Use default 24 hours
         } else {
-            std::cout << "Usage: disable_alarm <name>" << std::endl;
+            getAlarmStatistics(); // Get all alarm statistics with default 24 hours
         }
-    }
-    // Log operations
-    else if (cmd == "get_log_status") {
-        getLogStatus();
-    }
-    else if (cmd == "get_recent_logs") {
-        int32_t max_entries;
-        std::string level;
-        if (iss >> max_entries) {
-            if (iss >> level) {
-                getRecentLogs(max_entries, level);
-            } else {
-                getRecentLogs(max_entries);
-            }
-        } else {
-            std::cout << "Usage: get_recent_logs <count> [level]" << std::endl;
-        }
-    }
-    else if (cmd == "set_log_level") {
-        std::string level;
-        if (iss >> level) {
-            setLogLevel(level);
-        } else {
-            std::cout << "Usage: set_log_level <level>" << std::endl;
-        }
-    }
-    else if (cmd == "rotate_log") {
-        rotateLog();
     }
     else {
         std::cout << "Unknown command. Type 'help' for available commands." << std::endl;
@@ -426,17 +398,10 @@ void CLI::showFanHelp() {
     std::cout << "  get_temp_thresholds                 - Get current thresholds" << std::endl;
     std::cout << std::endl;
     std::cout << "  # Alarm operations" << std::endl;
-    std::cout << "  get_alarm_status                    - Get alarm status" << std::endl;
     std::cout << "  raise_alarm <name> <message> <severity> - Raise alarm" << std::endl;
     std::cout << "  get_alarm_history <count>           - Get alarm history" << std::endl;
-    std::cout << "  enable_alarm <name>                 - Enable alarm" << std::endl;
-    std::cout << "  disable_alarm <name>                - Disable alarm" << std::endl;
-    std::cout << std::endl;
-    std::cout << "  # Log operations" << std::endl;
-    std::cout << "  get_log_status                      - Get log status" << std::endl;
-    std::cout << "  get_recent_logs <count> [level]     - Get recent logs" << std::endl;
-    std::cout << "  set_log_level <level>               - Set log level" << std::endl;
-    std::cout << "  rotate_log                          - Rotate log file" << std::endl;
+    std::cout << "  clear_alarm_history [alarm_name]    - Clear alarm history (all if no name)" << std::endl;
+    std::cout << "  get_alarm_statistics [alarm_name] [time_window_hours] - Get alarm statistics" << std::endl;
     std::cout << std::endl;
     std::cout << "  help                                - Show this help" << std::endl;
     std::cout << "  exit                                - Return to main menu" << std::endl;
@@ -620,80 +585,354 @@ void CLI::getFanStatus(const std::string& fan_name) {
 }
 
 void CLI::setFanSpeed(const std::string& fan_name, int32_t duty_cycle) {
-    std::cout << "TODO: Implement setFanSpeed for fan: " << fan_name << " duty_cycle: " << duty_cycle << std::endl;
+    fan_control_system::FanSpeedRequest request;
+    request.set_fan_name(fan_name);
+    request.set_duty_cycle(duty_cycle);
+
+    fan_control_system::FanSpeedResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->SetFanSpeed(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Fan speed set successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+            
+            // Display individual results if available
+            for (const auto& result : response.results()) {
+                std::cout << "  Fan: " << result.fan_name() << std::endl;
+                std::cout << "    Success: " << (result.success() ? "Yes" : "No") << std::endl;
+                if (result.success()) {
+                    std::cout << "    Previous duty cycle: " << result.previous_duty_cycle() << "%" << std::endl;
+                    std::cout << "    New duty cycle: " << result.new_duty_cycle() << "%" << std::endl;
+                } else {
+                    std::cout << "    Error: " << result.error_message() << std::endl;
+                }
+            }
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::setFanSpeedAll(int32_t duty_cycle) {
-    std::cout << "TODO: Implement setFanSpeedAll duty_cycle: " << duty_cycle << std::endl;
+    fan_control_system::FanSpeedRequest request;
+    request.set_fan_name(""); // Empty name means set all fans
+    request.set_duty_cycle(duty_cycle);
+
+    fan_control_system::FanSpeedResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->SetFanSpeed(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "All fan speeds set successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+            
+            // Display individual results if available
+            for (const auto& result : response.results()) {
+                std::cout << "  Fan: " << result.fan_name() << std::endl;
+                std::cout << "    Success: " << (result.success() ? "Yes" : "No") << std::endl;
+                if (result.success()) {
+                    std::cout << "    Previous duty cycle: " << result.previous_duty_cycle() << "%" << std::endl;
+                    std::cout << "    New duty cycle: " << result.new_duty_cycle() << "%" << std::endl;
+                } else {
+                    std::cout << "    Error: " << result.error_message() << std::endl;
+                }
+            }
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::setFanPWM(const std::string& fan_name, int32_t pwm_count) {
-    std::cout << "TODO: Implement setFanPWM for fan: " << fan_name << " pwm_count: " << pwm_count << std::endl;
+    fan_control_system::FanPWMRequest request;
+    request.set_fan_name(fan_name);
+    request.set_pwm_count(pwm_count);
+
+    fan_control_system::FanPWMResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->SetFanPWM(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Fan PWM set successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+            std::cout << "Previous PWM: " << response.previous_pwm() << std::endl;
+            std::cout << "New PWM: " << response.new_pwm() << std::endl;
+            std::cout << "Corresponding duty cycle: " << response.corresponding_duty_cycle() << "%" << std::endl;
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::makeFanBad(const std::string& fan_name) {
-    std::cout << "TODO: Implement makeFanBad for fan: " << fan_name << std::endl;
+    fan_control_system::FanFaultRequest request;
+    request.set_fan_name(fan_name);
+
+    fan_control_system::FaultResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->MakeFanBad(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Fan " << fan_name << " made bad successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::makeFanGood(const std::string& fan_name) {
-    std::cout << "TODO: Implement makeFanGood for fan: " << fan_name << std::endl;
+    fan_control_system::FanFaultRequest request;
+    request.set_fan_name(fan_name);
+
+    fan_control_system::FaultResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->MakeFanGood(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Fan " << fan_name << " made good successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::getFanNoise(const std::string& fan_name) {
-    std::cout << "TODO: Implement getFanNoise for fan: " << fan_name << std::endl;
+    fan_control_system::FanNoiseRequest request;
+    request.set_fan_name(fan_name);
+
+    fan_control_system::FanNoiseResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->GetFanNoiseLevel(&context, request, &response);
+    if (status.ok()) {
+        std::cout << "Fan: " << fan_name << std::endl;
+        std::cout << "  Noise Level: " << response.noise_level_db() << " dB" << std::endl;
+        std::cout << "  Noise Category: " << response.noise_category() << std::endl;
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::getTemperatureHistory(const std::string& mcu_name, const std::string& sensor_id, int32_t max_readings) {
-    std::cout << "TODO: Implement getTemperatureHistory for " << mcu_name << ":" << sensor_id << " max_readings: " << max_readings << std::endl;
+    fan_control_system::TemperatureHistoryRequest request;
+    request.set_mcu_name(mcu_name);
+    request.set_sensor_id(std::stoi(sensor_id));
+    request.set_max_readings(max_readings);
+
+    fan_control_system::TemperatureHistoryResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->GetTemperatureHistory(&context, request, &response);
+    if (status.ok()) {
+        std::cout << "Temperature History for " << mcu_name << ":" << sensor_id << std::endl;
+        std::cout << "Total readings: " << response.total_readings() << std::endl;
+        std::cout << std::endl;
+        
+        for (const auto& reading : response.readings()) {
+            std::cout << "Timestamp: " << reading.timestamp() << std::endl;
+            std::cout << "  Temperature: " << reading.temperature() << "°C" << std::endl;
+            std::cout << "  Status: " << reading.status() << std::endl;
+            std::cout << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::getCoolingStatus() {
-    std::cout << "TODO: Implement getCoolingStatus" << std::endl;
+    fan_control_system::CoolingStatusRequest request;
+
+    fan_control_system::CoolingStatusResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->GetCoolingStatus(&context, request, &response);
+    if (status.ok()) {
+        std::cout << "Cooling Status:" << std::endl;
+        std::cout << "  Average Temperature: " << response.average_temperature() << "°C" << std::endl;
+        std::cout << "  Current Fan Speed: " << response.current_fan_speed() << "%" << std::endl;
+        std::cout << "  Cooling Mode: " << response.cooling_mode() << std::endl;
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::setTemperatureThresholds(double temp_low, double temp_high, int32_t fan_speed_min, int32_t fan_speed_max) {
-    std::cout << "TODO: Implement setTemperatureThresholds low: " << temp_low << " high: " << temp_high 
-              << " min_speed: " << fan_speed_min << " max_speed: " << fan_speed_max << std::endl;
+    fan_control_system::TemperatureThresholdsRequest request;
+    request.set_temp_threshold_low(temp_low);
+    request.set_temp_threshold_high(temp_high);
+    request.set_fan_speed_min(fan_speed_min);
+    request.set_fan_speed_max(fan_speed_max);
+
+    fan_control_system::TemperatureThresholdsResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->SetTemperatureThresholds(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Temperature thresholds set successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+            std::cout << "Low threshold: " << temp_low << "°C" << std::endl;
+            std::cout << "High threshold: " << temp_high << "°C" << std::endl;
+            std::cout << "Min fan speed: " << fan_speed_min << "%" << std::endl;
+            std::cout << "Max fan speed: " << fan_speed_max << "%" << std::endl;
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::getTemperatureThresholds() {
-    std::cout << "TODO: Implement getTemperatureThresholds" << std::endl;
-}
+    fan_control_system::GetTemperatureThresholdsRequest request;
 
-void CLI::getAlarmStatus() {
-    std::cout << "TODO: Implement getAlarmStatus" << std::endl;
+    fan_control_system::GetTemperatureThresholdsResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->GetTemperatureThresholds(&context, request, &response);
+    if (status.ok()) {
+        std::cout << "Temperature Thresholds:" << std::endl;
+        std::cout << "  Low threshold: " << response.temp_threshold_low() << "°C" << std::endl;
+        std::cout << "  High threshold: " << response.temp_threshold_high() << "°C" << std::endl;
+        std::cout << "  Min fan speed: " << response.fan_speed_min() << "%" << std::endl;
+        std::cout << "  Max fan speed: " << response.fan_speed_max() << "%" << std::endl;
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::raiseAlarm(const std::string& alarm_name, const std::string& message, const std::string& severity) {
-    std::cout << "TODO: Implement raiseAlarm name: " << alarm_name << " message: " << message << " severity: " << severity << std::endl;
+    fan_control_system::RaiseAlarmRequest request;
+    request.set_alarm_source(alarm_name);
+    request.set_message(message);
+    
+    // Convert string severity to enum
+    if (severity == "INFO" || severity == "info") {
+        request.set_severity(fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_INFO);
+    } else if (severity == "WARNING" || severity == "warning") {
+        request.set_severity(fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_WARNING);
+    } else if (severity == "ERROR" || severity == "error") {
+        request.set_severity(fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_ERROR);
+    } else if (severity == "CRITICAL" || severity == "critical") {
+        request.set_severity(fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_CRITICAL);
+    } else {
+        request.set_severity(fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_INFO);
+    }
+
+    fan_control_system::RaiseAlarmResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->RaiseAlarm(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Alarm raised successfully" << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 void CLI::getAlarmHistory(int32_t max_entries) {
-    std::cout << "TODO: Implement getAlarmHistory max_entries: " << max_entries << std::endl;
+    fan_control_system::AlarmHistoryRequest request;
+    request.set_alarm_name(""); // Empty name means get all alarms
+    request.set_max_entries(max_entries);
+
+    fan_control_system::AlarmHistoryResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->GetAlarmHistory(&context, request, &response);
+    if (status.ok()) {
+        std::cout << "Alarm History" << std::endl;
+        std::cout << "Total entries: " << response.total_entries() << std::endl;
+        std::cout << std::endl;
+        
+        for (const auto& entry : response.entries()) {
+            std::cout << "Timestamp: " << entry.timestamp() << std::endl;
+            std::cout << "  Alarm: " << entry.alarm_name() << std::endl;
+            std::cout << "  Message: " << entry.message() << std::endl;
+            std::cout << "  Severity: " << entry.severity() << std::endl;
+            std::cout << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
-void CLI::enableAlarm(const std::string& alarm_name) {
-    std::cout << "TODO: Implement enableAlarm name: " << alarm_name << std::endl;
+void CLI::clearAlarmHistory(const std::string& alarm_name) {
+    fan_control_system::ClearAlarmHistoryRequest request;
+    request.set_alarm_name(alarm_name);
+
+    fan_control_system::ClearAlarmHistoryResponse response;
+    grpc::ClientContext context;
+
+    grpc::Status status = fan_stub_->ClearAlarmHistory(&context, request, &response);
+    if (status.ok()) {
+        if (response.success()) {
+            std::cout << "Alarm history cleared successfully" << std::endl;
+            std::cout << "Cleared entries: " << response.cleared_entries() << std::endl;
+            std::cout << "Message: " << response.message() << std::endl;
+        } else {
+            std::cout << "Error: " << response.message() << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
-void CLI::disableAlarm(const std::string& alarm_name) {
-    std::cout << "TODO: Implement disableAlarm name: " << alarm_name << std::endl;
-}
+void CLI::getAlarmStatistics(const std::string& alarm_name, int32_t time_window_hours) {
+    fan_control_system::AlarmStatisticsRequest request;
+    request.set_alarm_name(alarm_name);
+    request.set_time_window_hours(time_window_hours);
 
-void CLI::getLogStatus() {
-    std::cout << "TODO: Implement getLogStatus" << std::endl;
-}
+    fan_control_system::AlarmStatisticsResponse response;
+    grpc::ClientContext context;
 
-void CLI::getRecentLogs(int32_t max_entries, const std::string& level) {
-    std::cout << "TODO: Implement getRecentLogs max_entries: " << max_entries << " level: " << level << std::endl;
-}
-
-void CLI::setLogLevel(const std::string& level) {
-    std::cout << "TODO: Implement setLogLevel level: " << level << std::endl;
-}
-
-void CLI::rotateLog() {
-    std::cout << "TODO: Implement rotateLog" << std::endl;
+    grpc::Status status = fan_stub_->GetAlarmStatistics(&context, request, &response);
+    if (status.ok()) {
+        std::cout << "Alarm Statistics (time window: " << time_window_hours << " hours):" << std::endl;
+        std::cout << "Total statistics entries: " << response.statistics_size() << std::endl;
+        std::cout << std::endl;
+        
+        for (const auto& stat : response.statistics()) {
+            std::cout << "Alarm: " << stat.alarm_name() << std::endl;
+            std::cout << "  Total Count: " << stat.total_count() << std::endl;
+            std::cout << "  Active Count: " << stat.active_count() << std::endl;
+            std::cout << "  Acknowledged Count: " << stat.acknowledged_count() << std::endl;
+            std::cout << "  First Occurrence: " << stat.first_occurrence() << std::endl;
+            std::cout << "  Last Occurrence: " << stat.last_occurrence() << std::endl;
+            
+            if (stat.severity_counts_size() > 0) {
+                std::cout << "  Severity Breakdown:" << std::endl;
+                for (const auto& severity_pair : stat.severity_counts()) {
+                    std::cout << "    " << severity_pair.first << ": " << severity_pair.second << std::endl;
+                }
+            }
+            std::cout << std::endl;
+        }
+    } else {
+        std::cout << "RPC failed: " << status.error_message() << std::endl;
+    }
 }
 
 } // namespace cli 

@@ -62,6 +62,18 @@ public:
      */
     std::shared_ptr<fan_control_system::FanSimulator> get_fan_simulator() const { return fan_simulator_; }
 
+    /**
+     * @brief Gets the temperature monitor and cooling component
+     * @return Shared pointer to the temperature monitor and cooling component
+     */
+    std::shared_ptr<fan_control_system::TempMonitorAndCooling> get_temp_monitor_and_cooling() const { return temp_monitor_; }
+
+    /**
+     * @brief Gets the alarm manager component
+     * @return Shared pointer to the alarm manager component
+     */
+    std::shared_ptr<fan_control_system::AlarmManager> get_alarm_manager() const { return alarm_manager_; }
+
 private:
     /**
      * @brief Initializes all system components
@@ -83,9 +95,9 @@ private:
 
     // Component instances
     std::shared_ptr<fan_control_system::FanSimulator> fan_simulator_;      ///< Fan simulator for controlling fan speeds
-    std::unique_ptr<fan_control_system::TempMonitorAndCooling> temp_monitor_; ///< Temperature monitoring and cooling control
+    std::shared_ptr<fan_control_system::TempMonitorAndCooling> temp_monitor_; ///< Temperature monitoring and cooling control
     std::unique_ptr<fan_control_system::LogManager> log_manager_;          ///< System-wide logging management
-    std::unique_ptr<fan_control_system::AlarmManager> alarm_manager_;      ///< System-wide alarm management
+    std::shared_ptr<fan_control_system::AlarmManager> alarm_manager_;      ///< System-wide alarm management
 
     // Threads
     std::thread main_thread_;                                              ///< Main system thread

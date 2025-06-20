@@ -71,6 +71,12 @@ public:
     const std::string& getModelName() const { return model_name_; }
 
     /**
+     * @brief Gets the interface of the fan
+     * @return The fan's interface
+     */
+    const std::string& getInterface() const { return interface_; }
+
+    /**
      * @brief Gets the current status of the fan
      * @return String describing the fan's current status
      * @note Status can be "GOOD", "BAD", or "NOISY"
@@ -81,7 +87,7 @@ public:
      * @brief Gets the current duty cycle of the fan
      * @return Current duty cycle (0-100)
      */
-    int getDutyCycle() const { return current_pwm_count_; }
+    int getDutyCycle() const { return current_duty_cycle_; }
 
     /**
      * @brief Gets the current PWM count of the fan
@@ -199,6 +205,7 @@ private:
     int duty_cycle_max_;                                         ///< Duty cycle maximum value
     int noise_level_;                                            ///< Noise level
     std::map<int, int> noise_profile_;                            ///< Noise profile
+    std::string interface_;                                        ///< Interface of the fan
 };
 
 } // namespace fan_control_system 

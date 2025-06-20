@@ -47,15 +47,15 @@ public:
                                         const TemperatureThresholdsRequest* request,
                                         TemperatureThresholdsResponse* response) override;
 
+    grpc::Status GetTemperatureThresholds(grpc::ServerContext* context,
+                                        const GetTemperatureThresholdsRequest* request,
+                                        GetTemperatureThresholdsResponse* response) override;
+
     grpc::Status GetCoolingStatus(grpc::ServerContext* context,
                                 const CoolingStatusRequest* request,
                                 CoolingStatusResponse* response) override;
 
     // Alarm Manager operations
-    grpc::Status GetAlarmStatus(grpc::ServerContext* context,
-                              const AlarmStatusRequest* request,
-                              AlarmStatusResponse* response) override;
-
     grpc::Status RaiseAlarm(grpc::ServerContext* context,
                           const RaiseAlarmRequest* request,
                           RaiseAlarmResponse* response) override;
@@ -64,30 +64,21 @@ public:
                                const AlarmHistoryRequest* request,
                                AlarmHistoryResponse* response) override;
 
-    grpc::Status EnableAlarm(grpc::ServerContext* context,
-                           const AlarmControlRequest* request,
-                           AlarmControlResponse* response) override;
+    grpc::Status GetAlarmConfig(grpc::ServerContext* context,
+                              const AlarmConfigRequest* request,
+                              AlarmConfigResponse* response) override;
 
-    grpc::Status DisableAlarm(grpc::ServerContext* context,
-                            const AlarmControlRequest* request,
-                            AlarmControlResponse* response) override;
+    grpc::Status GetSeverityActions(grpc::ServerContext* context,
+                                  const SeverityActionsRequest* request,
+                                  SeverityActionsResponse* response) override;
 
-    // Log Manager operations
-    grpc::Status GetLogStatus(grpc::ServerContext* context,
-                            const LogStatusRequest* request,
-                            LogStatusResponse* response) override;
+    grpc::Status ClearAlarmHistory(grpc::ServerContext* context,
+                                 const ClearAlarmHistoryRequest* request,
+                                 ClearAlarmHistoryResponse* response) override;
 
-    grpc::Status GetRecentLogs(grpc::ServerContext* context,
-                             const RecentLogsRequest* request,
-                             RecentLogsResponse* response) override;
-
-    grpc::Status SetLogLevel(grpc::ServerContext* context,
-                           const LogLevelRequest* request,
-                           LogLevelResponse* response) override;
-
-    grpc::Status RotateLogFile(grpc::ServerContext* context,
-                             const LogRotateRequest* request,
-                             LogRotateResponse* response) override;
+    grpc::Status GetAlarmStatistics(grpc::ServerContext* context,
+                                  const AlarmStatisticsRequest* request,
+                                  AlarmStatisticsResponse* response) override;
 
 private:
     FanControlSystem& system_;

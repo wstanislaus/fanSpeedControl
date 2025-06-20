@@ -154,6 +154,13 @@ public:
      * @return Noise level in decibels
      */
     int get_fan_noise_level(const std::string& fan_name) const;
+
+    /**
+     * @brief Gets the noise category for a specific fan
+     * @param fan_name Name of the fan to get the noise category for
+     * @return Noise category
+     */
+    std::string get_fan_noise_category(const std::string& fan_name) const;
 private:
     /**
      * @brief Initializes MQTT connection and components

@@ -67,17 +67,10 @@ private:
     void setTemperatureThresholds(double temp_low, double temp_high, int32_t fan_speed_min, int32_t fan_speed_max);
     void getTemperatureThresholds();
     
-    void getAlarmStatus();
     void raiseAlarm(const std::string& alarm_name, const std::string& message, const std::string& severity);
     void getAlarmHistory(int32_t max_entries);
-    void enableAlarm(const std::string& alarm_name);
-    void disableAlarm(const std::string& alarm_name);
-    
-    void getLogStatus();
-    void getRecentLogs(int32_t max_entries, const std::string& level = "");
-    void setLogLevel(const std::string& level);
-    void rotateLog();
-
+    void clearAlarmHistory(const std::string& alarm_name = "");
+    void getAlarmStatistics(const std::string& alarm_name = "", int32_t time_window_hours = 24);
 
     // Service connections
     std::shared_ptr<grpc::ChannelInterface> mcu_channel_;

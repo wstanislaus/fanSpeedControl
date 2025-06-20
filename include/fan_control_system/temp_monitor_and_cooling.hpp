@@ -49,6 +49,16 @@ struct TemperatureHistory {
 };
 
 /**
+ * @struct CoolingStatus
+ * @brief Structure for storing cooling status
+ */
+struct CoolingStatus {
+  float average_temperature;
+  int current_fan_speed;
+  std::string cooling_mode;  // "AUTO", "MANUAL", "EMERGENCY"
+};
+
+/**
  * @class TempMonitorAndCooling
  * @brief Monitors system temperatures and controls fan speeds for cooling
  * 
@@ -97,9 +107,52 @@ public:
      * @brief Gets temperature history for a specific MCU and sensor
      * @param mcu_name Name of the MCU
      * @param sensor_id ID of the sensor
+     * @param history_duration_minutes Duration of the history in minutes
      * @return Deque containing temperature readings with timestamps
      */
-    std::deque<TemperatureReading> get_temperature_history(const std::string& mcu_name, int sensor_id) const;
+    std::deque<TemperatureReading> get_temperature_history(const std::string& mcu_name, int sensor_id, int history_duration_minutes) const;
+
+    /**
+     * @brief Sets the temperature thresholds
+     * @param temp_threshold_low Low temperature threshold
+     * @param temp_threshold_high High temperature threshold
+     * @param fan_speed_min Minimum fan speed
+     * @param fan_speed_max Maximum fan speed
+     */
+    void set_thresholds(double temp_threshold_low, double temp_threshold_high, int fan_speed_min, int fan_speed_max);
+
+    /**
+     * @brief Sets the standard deviation threshold for erratic readings
+     * @param std_dev_threshold Standard deviation threshold in degrees Celsius
+     */
+    void set_std_dev_threshold(double std_dev_threshold) { std_dev_threshold_ = std_dev_threshold; }
+
+    /**
+     * @brief Gets the current standard deviation threshold
+     * @return Current standard deviation threshold in degrees Celsius
+     */
+    double get_std_dev_threshold() const { return std_dev_threshold_; }
+
+    /**
+     * @brief Gets the cooling status
+     * @return Cooling status
+     */
+    CoolingStatus get_cooling_status() const { return cooling_status_; };
+
+    /**
+     * @brief Gets the current temperature thresholds
+     * @return Struct containing current thresholds
+     */
+    struct Thresholds {
+        double temp_threshold_low;
+        double temp_threshold_high;
+        int fan_speed_min;
+        int fan_speed_max;
+    };
+    
+    Thresholds get_thresholds() const {
+        return {temp_threshold_low_, temp_threshold_high_, fan_speed_min_, fan_speed_max_};
+    }
 
 private:
     /**
@@ -125,9 +178,9 @@ private:
 
     /**
      * @brief Calculates required fan speed based on current temperatures
-     * @return Required fan speed as a percentage (0-100)
+     * @return Cooling status
      */
-    int calculate_fan_speed() const;
+    CoolingStatus calculate_fan_speed() const;
 
     /**
      * @brief MQTT message callback for receiving temperature data
@@ -136,6 +189,11 @@ private:
      * @param msg Pointer to the received message
      */
     static void mqtt_message_callback(struct mosquitto* mosq, void* obj, const struct mosquitto_message* msg);
+
+    /**
+     * @brief Updates the fan speed
+     */
+    void update_fan_speed();
 
     /**
      * @brief Main thread function for temperature monitoring
@@ -175,12 +233,15 @@ private:
     int fan_speed_max_{100};                             ///< Maximum fan speed percentage
     int update_interval_ms_{1000};                       ///< Update interval in milliseconds
     std::chrono::minutes history_duration_{10};          ///< Duration to keep temperature history
+    double std_dev_threshold_{5.0};                      ///< Standard deviation threshold for erratic readings
 
     // Temperature status
     std::map<std::string, int> temperature_status_;       ///< Temperature status for each fan
 
     // Name
     std::string name_;                                    ///< Name of the temperature monitor
+
+    CoolingStatus cooling_status_;
 };
 
 } // namespace fan_control_system 

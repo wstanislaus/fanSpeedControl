@@ -87,6 +87,11 @@ run_container() {
     docker exec $CONTAINER_ID bash -c "
         mosquitto -d
     "
+    echo "run mcu_simulator and fan_control_system in the background..."
+    docker exec $CONTAINER_ID bash -c "
+        /usr/local/bin/mcu_simulator &
+        /usr/local/bin/fan_control_system &
+    "
 
     echo "Starting interactive shell..."
     docker exec -it $CONTAINER_ID /bin/bash

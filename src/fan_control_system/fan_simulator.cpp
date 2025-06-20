@@ -425,4 +425,29 @@ int FanSimulator::get_fan_noise_level(const std::string& fan_name) const {
     }
     return it->second->getNoiseLevel();
 }
+
+std::string FanSimulator::get_fan_noise_category(const std::string& fan_name) const {
+    auto it = fans_.find(fan_name);
+    if (it == fans_.end()) {
+        logger_->warning("Attempted to get noise category for non-existent fan: " + fan_name);
+        return "UNKNOWN";
+    }
+    auto noise_level = it->second->getNoiseLevel();
+    if (noise_level <= static_cast<int>(NoiseLevel::QUIET)) {
+        return "QUIET";
+    } else if (noise_level <= static_cast<int>(NoiseLevel::MODERATE)) {
+        return "MODERATE";
+    } else if (noise_level <= static_cast<int>(NoiseLevel::LOUD)) {
+        return "LOUD";
+    } else if (noise_level <= static_cast<int>(NoiseLevel::VERY_LOUD)) {
+        return "VERY_LOUD";
+    } else if (noise_level <= static_cast<int>(NoiseLevel::EXTREMELY_LOUD)) {
+        return "EXTREMELY_LOUD";
+    } else if (noise_level <= static_cast<int>(NoiseLevel::PAINFULLY_LOUD)) {
+        return "PAINFULLY_LOUD";
+    } else {
+        return "DANGEROUS";
+    }
+}
+
 } // namespace fan_control_system 

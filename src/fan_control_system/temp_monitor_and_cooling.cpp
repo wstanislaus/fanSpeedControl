@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <cmath>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -37,6 +38,9 @@ TempMonitorAndCooling::TempMonitorAndCooling(const YAML::Node& config,
     if (!load_mcu_configs()) {
         throw std::runtime_error("Failed to initialize temperature monitor");
     }
+    cooling_status_.average_temperature = 0.0;
+    cooling_status_.current_fan_speed = 0;
+    cooling_status_.cooling_mode = "MANUAL";
 }
 
 /**
@@ -122,10 +126,11 @@ double TempMonitorAndCooling::get_temperature(const std::string& mcu_name, int s
  * 
  * @param mcu_name Name of the MCU
  * @param sensor_id ID of the temperature sensor
+ * @param max_readings Maximum number of readings to return
  * @return Deque of temperature readings, empty if no history available
  */
 std::deque<TemperatureReading> TempMonitorAndCooling::get_temperature_history(
-    const std::string& mcu_name, int sensor_id) const {
+    const std::string& mcu_name, int sensor_id, int max_readings) const {
     std::lock_guard<std::mutex> lock(history_mutex_);
     auto mcu_it = temperature_history_.find(mcu_name);
     if (mcu_it == temperature_history_.end()) {
@@ -139,9 +144,21 @@ std::deque<TemperatureReading> TempMonitorAndCooling::get_temperature_history(
         return {};
     }
 
+    // Create a list for the max readings specified and return it
+    std::deque<TemperatureReading> history; 
+    // Check if the size of the history is greater than the max readings, if so, return the until max readings, otherwise, return until available
+    if (sensor_it->second.readings.size() <= max_readings) {
+        return sensor_it->second.readings;
+    }
+    for (const auto& reading : sensor_it->second.readings) {
+        history.push_back(reading);
+        if (history.size() >= max_readings) {
+            break;
+        }
+    }
     logger_->debug("Retrieved temperature history for MCU: " + mcu_name + ", Sensor: " + std::to_string(sensor_id) + 
-                  ", Readings: " + std::to_string(sensor_it->second.readings.size()));
-    return sensor_it->second.readings;
+                  ", Readings: " + std::to_string(history.size()));
+    return history;
 }
 
 /**
@@ -166,11 +183,16 @@ bool TempMonitorAndCooling::initialize() {
         int history_duration_minutes = config_["TemperatureHistoryDurationMinutes"].as<int>();
         history_duration_ = std::chrono::minutes(history_duration_minutes);
 
+        // Load standard deviation threshold from TemperatureSettings
+        const auto& temp_settings = config_["TemperatureSettings"];
+        std_dev_threshold_ = temp_settings["ErraticThreshold"].as<double>();
+
         logger_->info("Loaded temperature thresholds: " + std::to_string(temp_threshold_low_) + 
                      "°C - " + std::to_string(temp_threshold_high_) + "°C");
         logger_->info("Loaded fan speed range: " + std::to_string(fan_speed_min_) + 
                      "% - " + std::to_string(fan_speed_max_) + "%");
         logger_->info("Loaded temperature history duration: " + std::to_string(history_duration_minutes) + " minutes");
+        logger_->info("Loaded standard deviation threshold: " + std::to_string(std_dev_threshold_) + "°C");
 
         // Subscribe to temperature topics
         std::string topic = "sensors/+/temperature";
@@ -191,6 +213,7 @@ bool TempMonitorAndCooling::initialize() {
             {"fan_speed_min", fan_speed_min_},
             {"fan_speed_max", fan_speed_max_},
             {"history_duration_minutes", history_duration_minutes},
+            {"std_dev_threshold", std_dev_threshold_},
             {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
         };
         mqtt_client_->publish("temp_monitor/config", config_data.dump());
@@ -279,32 +302,6 @@ void TempMonitorAndCooling::process_temperature_reading(
             history.readings.pop_front();
         }
     }
-
-    // Calculate and set new fan speed
-    int new_speed = calculate_fan_speed();
-    logger_->debug("Calculated new fan speed: " + std::to_string(new_speed) + "% based on temperature: " + 
-                  std::to_string(temperature) + "°C");
-
-    if (fan_simulator_) {
-        if (fan_simulator_->set_fan_speed(new_speed)) {
-            logger_->info("Updated fan speed to " + std::to_string(new_speed) + "%");
-        } else {
-            logger_->error("Failed to update fan speed");
-        }
-    } else {
-        logger_->warning("Fan simulator not available for speed control");
-    }
-
-    // Publish temperature update
-    json temp_data = {
-        {"mcu", mcu_name},
-        {"sensor_id", sensor_id},
-        {"temperature", temperature},
-        {"status", status},
-        {"fan_speed", new_speed},
-        {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
-    };
-    mqtt_client_->publish("temp_monitor/reading", temp_data.dump());
 }
 
 /**
@@ -314,32 +311,75 @@ void TempMonitorAndCooling::process_temperature_reading(
  * based on the current temperature relative to the configured thresholds.
  * 
  * @param temperature Current temperature reading
- * @return Required fan speed as a duty cycle percentage
+ * @return Cooling status
  */
-int TempMonitorAndCooling::calculate_fan_speed() const {
+CoolingStatus TempMonitorAndCooling::calculate_fan_speed() const {
+    CoolingStatus status;
+    status.current_fan_speed = 0;
+    status.cooling_mode = "MANUAL";
+    status.average_temperature = 0.0;
     std::lock_guard<std::mutex> lock(history_mutex_);
     // Find highest temperature across all sensors
     double max_temp = -1.0;
     for (const auto& mcu : temperature_history_) {
         // Calculate mean and standard deviations of all the sensors for a given MCU
         // If the standard deviation is too high, raise an alarm and skip this MCU as bad readings
-        double mean = 0.0;
-        double std_dev = 0.0;
+        std::vector<double> temperatures;
         int num_readings = 0;
+        
+        // First pass: collect all valid temperature readings
         for (const auto& sensor : mcu.second) {
-            if (sensor.second.readings.back().status != "Good") {
-                logger_->debug("Sensor " + std::to_string(sensor.first) + " is not good, skipping");
+            if (sensor.second.readings.empty()) {
+                logger_->debug("MCU " + mcu.first + " Sensor " + std::to_string(sensor.first) + " has no readings");
                 continue;
             }
-            mean += sensor.second.readings.back().temperature;
-            std_dev += std::pow(sensor.second.readings.back().temperature - mean, 2);
+            const auto& latest_reading = sensor.second.readings.back();
+            if (latest_reading.status != "Good") {
+                logger_->debug("MCU " + mcu.first + " Sensor " + std::to_string(sensor.first) + " is not good, skipping");
+                continue;
+            }
+            temperatures.push_back(latest_reading.temperature);
             num_readings++;
+            logger_->debug("MCU " + mcu.first + " Sensor " + std::to_string(sensor.first) + " temperature: " + std::to_string(latest_reading.temperature) + "°C");
+        }
+        
+        // Check if we have enough readings
+        if (num_readings < 2) {
+            logger_->debug("MCU " + mcu.first + " has insufficient readings (" + std::to_string(num_readings) + "), skipping");
+            continue;
+        }
+        
+        // Calculate mean
+        double mean = 0.0;
+        for (double temp : temperatures) {
+            mean += temp;
         }
         mean /= num_readings;
-        std_dev = std::sqrt(std_dev / num_readings);
-        if (std_dev > 1.0) {
+        
+        // Calculate standard deviation
+        double variance = 0.0;
+        for (double temp : temperatures) {
+            variance += std::pow(temp - mean, 2);
+        }
+        double std_dev = std::sqrt(variance / num_readings);
+        
+        // Additional safety check for NaN or infinite values
+        if (std::isnan(std_dev) || std::isinf(std_dev)) {
+            logger_->warning("MCU " + mcu.first + " has invalid standard deviation (NaN or inf), skipping");
+            continue;
+        }
+        
+        // Debug logging to show the readings being used
+        std::string temp_list = "Temperatures: ";
+        for (size_t i = 0; i < temperatures.size(); ++i) {
+            if (i > 0) temp_list += ", ";
+            temp_list += std::to_string(temperatures[i]) + "°C";
+        }
+        logger_->debug("MCU " + mcu.first + " - " + temp_list + " | Mean: " + std::to_string(mean) + "°C | StdDev: " + std::to_string(std_dev) + "°C");
+        
+        if (std_dev > std_dev_threshold_) {
             logger_->debug("MCU " + mcu.first + " has high standard deviation: " + std::to_string(std_dev));
-            alarm_->raise(common::AlarmSeverity::HIGH, "MCU " + mcu.first + " has high standard deviation: " + std::to_string(std_dev) + "°C hence skipping");
+            alarm_->raise(common::AlarmSeverity::HIGH, "MCU " + mcu.first + " has high standard deviation: " + std::to_string(std_dev) + "°C, mean: " + std::to_string(mean) + "°C, hence skipping");
             continue;
         }
         max_temp = std::max(max_temp, mean);
@@ -348,7 +388,8 @@ int TempMonitorAndCooling::calculate_fan_speed() const {
     // If no good readings, return minimum fan speed
     if (max_temp < 0.0) {
         logger_->debug("No temperature readings available, using minimum fan speed");
-        return fan_speed_min_;
+        status.current_fan_speed = fan_speed_min_;
+        return status;
     }
 
     // Linear interpolation between thresholds
@@ -363,7 +404,9 @@ int TempMonitorAndCooling::calculate_fan_speed() const {
     }
     logger_->debug("Calculated fan speed: " + std::to_string(speed) + "% for max temperature: " + 
                   std::to_string(max_temp) + "°C");
-    return speed;
+    status.current_fan_speed = speed;
+    status.average_temperature = max_temp;
+    return status;
 }
 
 /**
@@ -395,6 +438,57 @@ void TempMonitorAndCooling::mqtt_message_callback(
 }
 
 /**
+ * @brief Sets the temperature thresholds
+ * @param temp_threshold_low Low temperature threshold
+ * @param temp_threshold_high High temperature threshold
+ * @param fan_speed_min Minimum fan speed
+ * @param fan_speed_max Maximum fan speed
+ */
+void TempMonitorAndCooling::set_thresholds(double temp_threshold_low, double temp_threshold_high, int fan_speed_min, int fan_speed_max) {
+    temp_threshold_low_ = temp_threshold_low;
+    temp_threshold_high_ = temp_threshold_high;
+    fan_speed_min_ = fan_speed_min;
+    fan_speed_max_ = fan_speed_max;
+    logger_->info("Temperature thresholds set to: " + std::to_string(temp_threshold_low) + "°C - " + std::to_string(temp_threshold_high) + "°C");
+    logger_->info("Fan speed range set to: " + std::to_string(fan_speed_min) + "% - " + std::to_string(fan_speed_max) + "%");
+}
+
+void TempMonitorAndCooling::update_fan_speed() {
+    // Calculate and set new fan speed
+    CoolingStatus new_status = calculate_fan_speed();
+    // Check if current fan speed is different by 10% from the new fan speed, then only update the fan speed
+    // or the temperature is different by 5°C, then only update the fan speed
+    if (std::abs(cooling_status_.current_fan_speed - new_status.current_fan_speed) > 10 || 
+        std::abs(cooling_status_.average_temperature - new_status.average_temperature) > 5.0) {
+        cooling_status_.current_fan_speed = new_status.current_fan_speed;
+        cooling_status_.average_temperature = new_status.average_temperature;
+        cooling_status_.cooling_mode = "MANUAL";
+    } else {
+        logger_->debug("No need to update fan speed or temperature");
+        return;
+    }
+
+    if (fan_simulator_) {
+        if (fan_simulator_->set_fan_speed(new_status.current_fan_speed)) {
+            logger_->info("Updated fan speed to " + std::to_string(new_status.current_fan_speed) + "%");
+        } else {
+            logger_->error("Failed to update fan speed");
+        }
+    } else {
+        logger_->warning("Fan simulator not available for speed control");
+    }
+
+    // Publish temperature update
+    json temp_data = {
+        {"cooling_mode", new_status.cooling_mode},
+        {"average_temperature", new_status.average_temperature},
+        {"current_fan_speed", new_status.current_fan_speed},
+        {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
+    };
+    mqtt_client_->publish("temp_monitor/cooling_status", temp_data.dump());
+}
+
+/**
  * @brief Main thread function for the temperature monitor
  * 
  * Runs in a loop while the monitor is active, handling any background tasks.
@@ -402,7 +496,8 @@ void TempMonitorAndCooling::mqtt_message_callback(
 void TempMonitorAndCooling::main_thread_function() {
     logger_->info("Temperature Monitor main thread started");
     while (running_) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        update_fan_speed();
+        std::this_thread::sleep_for(std::chrono::milliseconds(update_interval_ms_));
     }
     logger_->info("Temperature Monitor main thread stopped");
 }

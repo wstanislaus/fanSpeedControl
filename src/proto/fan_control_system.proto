@@ -15,21 +15,16 @@ service FanControlSystemService {
   // Temperature Monitor operations
   rpc GetTemperatureHistory (TemperatureHistoryRequest) returns (TemperatureHistoryResponse) {}
   rpc SetTemperatureThresholds (TemperatureThresholdsRequest) returns (TemperatureThresholdsResponse) {}
+  rpc GetTemperatureThresholds (GetTemperatureThresholdsRequest) returns (GetTemperatureThresholdsResponse) {}
   rpc GetCoolingStatus (CoolingStatusRequest) returns (CoolingStatusResponse) {}
   
   // Alarm Manager operations
-  rpc GetAlarmStatus (AlarmStatusRequest) returns (AlarmStatusResponse) {}
   rpc RaiseAlarm (RaiseAlarmRequest) returns (RaiseAlarmResponse) {}
   rpc GetAlarmHistory (AlarmHistoryRequest) returns (AlarmHistoryResponse) {}
-  rpc EnableAlarm (AlarmControlRequest) returns (AlarmControlResponse) {}
-  rpc DisableAlarm (AlarmControlRequest) returns (AlarmControlResponse) {}
-  
-  // Log Manager operations
-  rpc GetLogStatus (LogStatusRequest) returns (LogStatusResponse) {}
-  rpc GetRecentLogs (RecentLogsRequest) returns (RecentLogsResponse) {}
-  rpc SetLogLevel (LogLevelRequest) returns (LogLevelResponse) {}
-  rpc RotateLogFile (LogRotateRequest) returns (LogRotateResponse) {}
-
+  rpc GetAlarmConfig (AlarmConfigRequest) returns (AlarmConfigResponse) {}
+  rpc GetSeverityActions (SeverityActionsRequest) returns (SeverityActionsResponse) {}
+  rpc ClearAlarmHistory (ClearAlarmHistoryRequest) returns (ClearAlarmHistoryResponse) {}
+  rpc GetAlarmStatistics (AlarmStatisticsRequest) returns (AlarmStatisticsResponse) {}
 }
 
 // ============================================================================
@@ -103,8 +98,6 @@ message FanNoiseRequest {
 message FanNoiseResponse {
   int32 noise_level_db = 1;
   string noise_category = 2;  // "QUIET", "MODERATE", "LOUD", etc.
-  bool is_above_threshold = 3;
-  int32 threshold_db = 4;
 }
 
 // ============================================================================
@@ -140,10 +133,13 @@ message TemperatureThresholdsRequest {
 message TemperatureThresholdsResponse {
   bool success = 1;
   string message = 2;
-  TemperatureThresholds current_thresholds = 3;
 }
 
-message TemperatureThresholds {
+message GetTemperatureThresholdsRequest {
+  // Empty request to get temperature thresholds
+}
+
+message GetTemperatureThresholdsResponse {
   double temp_threshold_low = 1;
   double temp_threshold_high = 2;
   int32 fan_speed_min = 3;
@@ -158,31 +154,11 @@ message CoolingStatusResponse {
   double average_temperature = 1;
   int32 current_fan_speed = 2;
   string cooling_mode = 3;  // "AUTO", "MANUAL", "EMERGENCY"
-  bool is_cooling_adequate = 4;
-  repeated string active_alarms = 5;
 }
 
 // ============================================================================
 // Alarm Manager Messages
 // ============================================================================
-
-message AlarmStatusRequest {
-  string alarm_name = 1;  // Optional, if empty returns status of all alarms
-}
-
-message AlarmStatusResponse {
-  repeated ProtoAlarmStatus alarms = 1;
-}
-
-message ProtoAlarmStatus {
-  string name = 1;
-  string description = 2;
-  bool is_active = 3;
-  ProtoAlarmSeverity severity = 4;
-  string timestamp = 5;
-  repeated string actions = 6;
-  bool is_enabled = 7;
-}
 
 enum ProtoAlarmSeverity {
   PROTO_ALARM_INFO = 0;
@@ -192,9 +168,9 @@ enum ProtoAlarmSeverity {
 }
 
 message RaiseAlarmRequest {
-  string alarm_name = 1;
-  string message = 2;
-  ProtoAlarmSeverity severity = 3;
+  string alarm_source = 1;
+  ProtoAlarmSeverity severity = 2;
+  string message = 3;
 }
 
 message RaiseAlarmResponse {
@@ -220,77 +196,58 @@ message ProtoAlarmHistoryEntry {
   bool was_acknowledged = 5;
 }
 
-message AlarmControlRequest {
+message AlarmConfigRequest {
+  // Empty 
+}
+
+message AlarmConfigResponse {
+  repeated ProtoAlarmConfig configs = 1;
+}
+
+message ProtoAlarmConfig {
+  int32 alarm_history_size = 1;
+  map<string, ProtoSeverityActions> severity_actions = 2;
+}
+
+message SeverityActionsRequest {
+  // Empty request to get all severity actions
+}
+
+message SeverityActionsResponse {
+  map<string, ProtoSeverityActions> severity_actions = 1;
+}
+
+message ProtoSeverityActions {
+  repeated string actions = 1;
+}
+
+message ClearAlarmHistoryRequest {
+  string alarm_name = 1;  // Optional, if empty clears all alarm history
+}
+
+message ClearAlarmHistoryResponse {
+  bool success = 1;
+  string message = 2;
+  int32 cleared_entries = 3;
+}
+
+message AlarmStatisticsRequest {
+  string alarm_name = 1;  // Optional, if empty returns statistics for all alarms
+  int32 time_window_hours = 2;  // Time window for statistics (default: 24)
+}
+
+message AlarmStatisticsResponse {
+  repeated ProtoAlarmStatistics statistics = 1;
+}
+
+message ProtoAlarmStatistics {
   string alarm_name = 1;
-}
-
-message AlarmControlResponse {
-  bool success = 1;
-  string message = 2;
-  bool previous_state = 3;
-}
-
-// ============================================================================
-// Log Manager Messages
-// ============================================================================
-
-message LogStatusRequest {
-  // Empty request to get current log status
-}
-
-message LogStatusResponse {
-  string current_log_file = 1;
-  int64 current_log_size = 2;
-  ProtoLogLevel current_log_level = 3;
-  int32 pending_log_entries = 4;
-  bool is_running = 5;
-}
-
-enum ProtoLogLevel {
-  PROTO_LOG_DEBUG = 0;
-  PROTO_LOG_INFO = 1;
-  PROTO_LOG_WARNING = 2;
-  PROTO_LOG_ERROR = 3;
-}
-
-message RecentLogsRequest {
-  int32 max_entries = 1;  // Maximum number of log entries to return
-  ProtoLogLevel min_level = 2;  // Minimum log level to include
-}
-
-message RecentLogsResponse {
-  repeated ProtoLogEntry entries = 1;
-  int32 total_entries = 2;
-}
-
-message ProtoLogEntry {
-  string timestamp = 1;
-  string level = 2;
-  string source = 3;
-  string message = 4;
-  string metadata = 5;  // JSON string
-}
-
-message LogLevelRequest {
-  ProtoLogLevel new_level = 1;
-}
-
-message LogLevelResponse {
-  bool success = 1;
-  string message = 2;
-  ProtoLogLevel previous_level = 3;
-  ProtoLogLevel current_level = 4;
-}
-
-message LogRotateRequest {
-  // Empty request to trigger log rotation
-}
-
-message LogRotateResponse {
-  bool success = 1;
-  string message = 2;
-  string new_log_file = 3;
-  string rotated_log_file = 4;
+  int32 total_count = 2;
+  int32 active_count = 3;
+  int32 acknowledged_count = 4;
+  map<string, int32> severity_counts = 5;  // Count by severity
+  string last_occurrence = 6;
+  string first_occurrence = 7;
 }
 
 // ============================================================================
