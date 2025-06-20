@@ -111,7 +111,7 @@ The system uses YAML configuration files for:
 - Mosquitto (MQTT)
 - nlohmann/json
 
-## Building the Project
+## Project Development
 
 1. Clone the repository:
 ```bash
@@ -119,24 +119,11 @@ git clone https://github.com/wstanislaus/fanSpeedControl.git
 cd fanSpeedControl
 ```
 
-2. Create and activate a virtual environment (optional but recommended to use python scripts):
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r scripts/requirements.txt
-```
-
-3. Build the project:
-```bash
-make clean && make
-```
-
 ## Configuration
 
 The system is configured through global YAML configuration file:
 
-- `config/config.yaml`: MCU and temperature sensor configuration
-- `config/config.yaml`: Fan controller and fan model configuration
+- `config/config.yaml`: MCU and temperature sensor configuration, Fan controller and fan model configuration, Alarm settings, logging settings etc
 
 ## Usage
 
@@ -685,3 +672,402 @@ debug_cli
 - **Easy Navigation**: Use 'exit' to return to main menu, 'quit' to exit application
 - **Service Isolation**: Each service maintains its own connection and state
 - **Enhanced Alarm Management**: New alarm statistics and history clearing capabilities
+
+## MQTT Communication
+
+The system uses MQTT (Message Queuing Telemetry Transport) for real-time communication between components. All MQTT messages use JSON format with standardized timestamp formatting.
+
+### Timestamp Format
+
+All timestamps in MQTT JSON messages use the **ISO 8601-like format**: `"YYYY-MM-DD HH:MM:SS"`
+
+**Examples**:
+- `"2025-06-20 04:06:21"`
+- `"2025-01-15 14:30:25"`
+- `"2024-12-31 23:59:59"`
+
+This format is consistent across all system components and provides human-readable timestamps for easy debugging and monitoring.
+
+### MQTT Topics and Message Formats
+
+The system publishes data to various MQTT topics for monitoring and debugging purposes:
+
+#### 1. Temperature Sensor Data
+**Topic Pattern**: `sensors/{MCU_NAME}/temperature`
+
+**Description**: Real-time temperature readings from MCU sensors with dynamic publish intervals based on temperature ranges.
+
+**Example Topics**:
+- `sensors/MCU001/temperature`
+- `sensors/MCU002/temperature`
+- `sensors/MCU003/temperature`
+
+**Message Format**:
+```json
+{
+  "MCU": "MCU001",
+  "NoOfTempSensors": 3,
+  "MsgTimestamp": "2025-06-20 04:06:21",
+  "SensorData": [
+    {
+      "SensorID": 1,
+      "ReadAt": "2025-06-20 04:06:21",
+      "Value": 43.3,
+      "Status": "Good"
+    },
+    {
+      "SensorID": 2,
+      "ReadAt": "2025-06-20 04:06:21",
+      "Value": 46.6,
+      "Status": "Good"
+    },
+    {
+      "SensorID": 3,
+      "ReadAt": "2025-06-20 04:06:21",
+      "Value": 48.7,
+      "Status": "Good"
+    }
+  ]
+}
+```
+
+**Publish Intervals**:
+- 0-25°C: 10 seconds
+- 25-40°C: 7 seconds
+- 40-50°C: 5 seconds
+- 50-60°C: 3 seconds
+- 60-70°C: 2 seconds
+- >70°C: 1 second
+
+**Debug Command**:
+```bash
+# Monitor all temperature data
+mosquitto_sub -h localhost -t 'sensors/+/temperature' -F "%t => %p"
+
+# Monitor specific MCU
+mosquitto_sub -h localhost -t 'sensors/MCU001/temperature' -F "%t => %p"
+```
+
+#### 2. Fan Status and Configuration
+**Topic Pattern**: `fan/{FAN_NAME}/{config|status}`
+
+**Description**: Fan configuration and real-time status updates including PWM count, duty cycle, and noise levels.
+
+**Example Topics**:
+- `fan/Fan001/config` - Initial fan configuration
+- `fan/Fan001/status` - Real-time fan status
+- `fan/Fan002/config`
+- `fan/Fan002/status`
+- `fan/Fan003/config`
+- `fan/Fan003/status`
+- `fan/Fan004/config`
+- `fan/Fan004/status`
+
+**Config Message Format**:
+```json
+{
+  "name": "Fan001",
+  "model": "F4ModelOUT",
+  "i2c_address": "0x4a",
+  "pwm_reg": "0x10",
+  "status": "Good",
+  "timestamp": "2025-06-20 04:06:21"
+}
+```
+
+**Status Message Format**:
+```json
+{
+  "name": "Fan001",
+  "model": "F4ModelOUT",
+  "status": "Good",
+  "pwm_count": 775,
+  "duty_cycle": 42,
+  "i2c_address": "0x4a",
+  "pwm_reg": "0x10",
+  "timestamp": "2025-06-20 04:06:21"
+}
+```
+
+**Debug Commands**:
+```bash
+# Monitor all fan configurations
+mosquitto_sub -h localhost -t 'fan/+/config' -F "%t => %p"
+
+# Monitor all fan status updates
+mosquitto_sub -h localhost -t 'fan/+/status' -F "%t => %p"
+
+# Monitor specific fan
+mosquitto_sub -h localhost -t 'fan/Fan001/#' -F "%t => %p"
+```
+
+#### 3. Temperature Monitor
+**Topic Pattern**: `temp_monitor/{config|cooling_status}`
+
+**Description**: Temperature monitoring system configuration and cooling status updates.
+
+**Topics**:
+- `temp_monitor/config` - Temperature monitor configuration
+- `temp_monitor/cooling_status` - Real-time cooling system status
+
+**Config Message Format**:
+```json
+{
+  "status": "initialized",
+  "mcu_count": 3,
+  "temp_threshold_low": 25.0,
+  "temp_threshold_high": 75.0,
+  "fan_speed_min": 20,
+  "fan_speed_max": 100,
+  "history_duration_minutes": 10,
+  "std_dev_threshold": 5.0,
+  "timestamp": "2025-06-20 04:06:21"
+}
+```
+
+**Cooling Status Message Format**:
+```json
+{
+  "cooling_mode": "MANUAL",
+  "average_temperature": 66.7,
+  "current_fan_speed": 86,
+  "timestamp": "2025-06-20 04:06:21"
+}
+```
+
+**Debug Commands**:
+```bash
+# Monitor temperature monitor configuration
+mosquitto_sub -h localhost -t 'temp_monitor/config' -F "%t => %p"
+
+# Monitor cooling status
+mosquitto_sub -h localhost -t 'temp_monitor/cooling_status' -F "%t => %p"
+
+# Monitor all temperature monitor topics
+mosquitto_sub -h localhost -t 'temp_monitor/#' -F "%t => %p"
+```
+
+#### 4. Alarm System
+**Topic Pattern**: `alarms/{ALARM_NAME}/{raise|clear}`
+
+**Description**: Alarm system messages for raising and clearing alarms with severity levels.
+
+**Example Topics**:
+- `alarms/MCU001/raise` - MCU001 alarm raised
+- `alarms/MCU001/clear` - MCU001 alarm cleared
+- `alarms/Fan001/raise` - Fan001 alarm raised
+- `alarms/Fan001/clear` - Fan001 alarm cleared
+
+**Raise Message Format**:
+```json
+{
+  "timestamp": "2025-06-20 04:08:08",
+  "severity": 2,
+  "source": "MCU001",
+  "message": "MCU MCU001 set to faulty state",
+  "is_clear": false
+}
+```
+
+**Clear Message Format**:
+```json
+{
+  "timestamp": "2025-06-20 04:10:18",
+  "severity": 2,
+  "source": "MCU001",
+  "message": "MCU MCU001 restored to normal state",
+  "is_clear": true
+}
+```
+
+**Severity Levels**:
+- 0: INFO
+- 1: WARNING
+- 2: ERROR
+- 3: CRITICAL
+
+**Debug Commands**:
+```bash
+# Monitor all alarm messages
+mosquitto_sub -h localhost -t 'alarms/#' -F "%t => %p"
+
+# Monitor only alarm raises
+mosquitto_sub -h localhost -t 'alarms/+/raise' -F "%t => %p"
+
+# Monitor only alarm clears
+mosquitto_sub -h localhost -t 'alarms/+/clear' -F "%t => %p"
+
+# Monitor specific component alarms
+mosquitto_sub -h localhost -t 'alarms/MCU001/#' -F "%t => %p"
+```
+
+#### 5. Logging System
+**Topic Pattern**: `logs/{COMPONENT_NAME}/{debug|info|warning|error}`
+
+**Description**: System-wide logging with different severity levels for debugging and monitoring.
+
+**Example Topics**:
+- `logs/MCUSimulator/debug`
+- `logs/MCUSimulator/info`
+- `logs/MCUSimulator/warning`
+- `logs/MCUSimulator/error`
+- `logs/FanSimulator/debug`
+- `logs/FanSimulator/info`
+- `logs/TempMonitor/debug`
+- `logs/TempMonitor/info`
+- `logs/AlarmManager/debug`
+- `logs/AlarmManager/info`
+- `logs/LogManager/debug`
+- `logs/LogManager/info`
+
+**Message Format**:
+```json
+{
+  "timestamp": "2025-06-20 04:06:21",
+  "level": 1,
+  "source": "MCUSimulator",
+  "message": "MCU MCU001 initialized successfully"
+}
+```
+
+**Log Levels**:
+- 0: DEBUG
+- 1: INFO
+- 2: WARNING
+- 3: ERROR
+
+**Debug Commands**:
+```bash
+# Monitor all log messages
+mosquitto_sub -h localhost -t 'logs/#' -F "%t => %p"
+
+# Monitor only error logs
+mosquitto_sub -h localhost -t 'logs/+/error' -F "%t => %p"
+
+# Monitor specific component logs
+mosquitto_sub -h localhost -t 'logs/MCUSimulator/#' -F "%t => %p"
+
+# Monitor info and error logs for all components
+mosquitto_sub -h localhost -t 'logs/+/info' -t 'logs/+/error' -F "%t => %p"
+```
+
+### Advanced MQTT Debugging Techniques
+
+#### 1. Wildcard Subscriptions
+Use MQTT wildcards to monitor multiple topics:
+
+```bash
+# Monitor all system topics
+mosquitto_sub -h localhost -t '#' -F "%t => %p"
+
+# Monitor all sensor and fan data
+mosquitto_sub -h localhost -t 'sensors/#' -t 'fan/#' -F "%t => %p"
+
+# Monitor all alarms and logs
+mosquitto_sub -h localhost -t 'alarms/#' -t 'logs/#' -F "%t => %p"
+```
+
+#### 2. Topic Filtering with Format
+Use custom formats to make output more readable:
+
+```bash
+# Show timestamp with topic and payload
+mosquitto_sub -h localhost -t 'sensors/+/temperature' -F "%U => %t => %p"
+
+# Show only temperature values
+mosquitto_sub -h localhost -t 'sensors/+/temperature' -F "Temp: %p"
+
+# Show fan status in a readable format
+mosquitto_sub -h localhost -t 'fan/+/status' -F "Fan Status: %t => %p"
+```
+
+#### 3. Real-time System Monitoring
+Create a comprehensive monitoring dashboard:
+
+```bash
+# Terminal 1: Monitor temperature data
+mosquitto_sub -h localhost -t 'sensors/+/temperature' -F "%t => %p"
+
+# Terminal 2: Monitor fan status
+mosquitto_sub -h localhost -t 'fan/+/status' -F "%t => %p"
+
+# Terminal 3: Monitor alarms
+mosquitto_sub -h localhost -t 'alarms/#' -F "%t => %p"
+
+# Terminal 4: Monitor errors
+mosquitto_sub -h localhost -t 'logs/+/error' -F "%t => %p"
+```
+
+#### 4. Data Analysis and Filtering
+Use command-line tools to analyze MQTT data:
+
+```bash
+# Count temperature messages per MCU
+mosquitto_sub -h localhost -t 'sensors/+/temperature' | grep -o '"MCU":"[^"]*"' | sort | uniq -c
+
+# Monitor temperature trends
+mosquitto_sub -h localhost -t 'sensors/+/temperature' | jq -r '.SensorData[].Value' | tail -20
+
+# Check for high temperatures
+mosquitto_sub -h localhost -t 'sensors/+/temperature' | jq -r '.SensorData[] | select(.Value > 70) | "High temp: \(.Value)°C"'
+```
+
+#### 5. Performance Monitoring
+Monitor system performance and message rates:
+
+```bash
+# Count messages per second
+mosquitto_sub -h localhost -t '#' | pv -l > /dev/null
+
+# Monitor specific topic message rates
+mosquitto_sub -h localhost -t 'sensors/+/temperature' | pv -l > /dev/null
+```
+
+### Troubleshooting MQTT Issues
+
+#### 1. Connection Issues
+```bash
+# Test MQTT broker connectivity
+mosquitto_pub -h localhost -t 'test/topic' -m 'test message'
+mosquitto_sub -h localhost -t 'test/topic' -C 1
+```
+
+#### 2. Message Flow Verification
+```bash
+# Verify temperature data flow
+mosquitto_sub -h localhost -t 'sensors/+/temperature' -C 5
+
+# Verify fan status updates
+mosquitto_sub -h localhost -t 'fan/+/status' -C 5
+
+# Verify alarm system
+mosquitto_sub -h localhost -t 'alarms/#' -C 5
+```
+
+#### 3. Debugging Specific Components
+```bash
+# Debug MCU Simulator
+mosquitto_sub -h localhost -t 'logs/MCUSimulator/#' -t 'sensors/+/temperature' -F "%t => %p"
+
+# Debug Fan Control System
+mosquitto_sub -h localhost -t 'logs/FanSimulator/#' -t 'fan/+/status' -t 'temp_monitor/#' -F "%t => %p"
+
+# Debug Alarm System
+mosquitto_sub -h localhost -t 'logs/AlarmManager/#' -t 'alarms/#' -F "%t => %p"
+```
+
+### MQTT Topic Summary
+
+| Category        | Topic Pattern                       | Description               | Frequency    |
+|-----------------|-------------------------------------|---------------------------|--------------|
+| **Temperature** | `sensors/{MCU}/temperature`         | Real-time sensor readings | 1-10 seconds |
+| **Fan Status**  | `fan/{FAN}/status`                  | Fan operational status    | Continuous   |
+| **Fan Config**  | `fan/{FAN}/config`                  | Fan configuration         | On startup   |
+| **Cooling**     | `temp_monitor/cooling_status`       | Cooling system status     | 2 seconds    |
+| **Alarms**      | `alarms/{COMPONENT}/{raise\|clear}` | Alarm events | On demand  |
+| **Logs**        | `logs/{COMPONENT}/{level}`          | System logs | On events   |
+
+This MQTT debugging system provides comprehensive visibility into all aspects of the Fan Speed Control System, enabling real-time monitoring, debugging, and performance analysis.
+
+
+

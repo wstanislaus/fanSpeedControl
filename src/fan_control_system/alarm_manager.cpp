@@ -1,4 +1,5 @@
 #include "fan_control_system/alarm_manager.hpp"
+#include "common/utils.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <nlohmann/json.hpp>
@@ -336,11 +337,7 @@ void AlarmManager::process_alarm(const std::string& alarm_source, AlarmSeverity 
     entry.acknowledged = false;
     
     // Generate timestamp
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    entry.timestamp = ss.str();
+    entry.timestamp = common::utils::getCurrentTimestamp();
 
     // Add to runtime database
     add_alarm_entry(entry);

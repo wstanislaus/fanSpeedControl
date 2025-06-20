@@ -1,7 +1,6 @@
 #include "common/alarm.hpp"
+#include "common/utils.hpp"
 #include <sstream>
-#include <iomanip>
-#include <chrono>
 
 using json = nlohmann::json;
 
@@ -86,11 +85,7 @@ std::string Alarm::formatAlarmMessage(AlarmSeverity severity, const std::string&
  * @return Timestamp string in the format "YYYY-MM-DD HH:MM:SS"
  */
 std::string Alarm::getTimestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
-    return ss.str();
+    return utils::getCurrentTimestamp();
 }
 
 } // namespace common 

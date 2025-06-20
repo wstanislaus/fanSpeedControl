@@ -6,11 +6,30 @@
 
 namespace mcu_simulator {
 
-// MCUSimulatorServiceImpl implementation
+/**
+ * @brief Constructs a new MCU Simulator Service implementation
+ * 
+ * Initializes the RPC service implementation with a reference to the MCU simulator.
+ * This service handles all gRPC requests for MCU simulator operations.
+ * 
+ * @param simulator Reference to the MCU simulator instance
+ */
 MCUSimulatorServiceImpl::MCUSimulatorServiceImpl(MCUSimulator& simulator)
     : simulator_(simulator) {
 }
 
+/**
+ * @brief Handles GetTemperature RPC requests
+ * 
+ * Retrieves the current temperature from a specific sensor on a specific MCU.
+ * Validates that the MCU exists and is not faulty before attempting to read
+ * the temperature.
+ * 
+ * @param context gRPC server context
+ * @param request Temperature request containing MCU name and sensor ID
+ * @param response Temperature response containing the temperature value and validity
+ * @return gRPC status indicating success or failure
+ */
 grpc::Status MCUSimulatorServiceImpl::GetTemperature(grpc::ServerContext* context,
                                                    const TemperatureRequest* request,
                                                    TemperatureResponse* response) {
@@ -48,6 +67,18 @@ grpc::Status MCUSimulatorServiceImpl::GetTemperature(grpc::ServerContext* contex
     }
 }
 
+/**
+ * @brief Handles GetMCUStatus RPC requests
+ * 
+ * Retrieves the status of MCUs and their sensors. If no specific MCU name is provided,
+ * returns status for all MCUs. Includes information about sensor interfaces, addresses,
+ * and operational status.
+ * 
+ * @param context gRPC server context
+ * @param request Status request containing optional MCU name
+ * @param response Status response containing MCU and sensor status information
+ * @return gRPC status indicating success or failure
+ */
 grpc::Status MCUSimulatorServiceImpl::GetMCUStatus(grpc::ServerContext* context,
                                                  const StatusRequest* request,
                                                  StatusResponse* response) {
@@ -103,6 +134,18 @@ grpc::Status MCUSimulatorServiceImpl::GetMCUStatus(grpc::ServerContext* context,
     }
 }
 
+/**
+ * @brief Handles SetSimulationParams RPC requests
+ * 
+ * Sets the temperature simulation parameters for a specific sensor on a specific MCU.
+ * Parameters include start temperature, end temperature, and step size for the
+ * temperature oscillation simulation.
+ * 
+ * @param context gRPC server context
+ * @param request Simulation parameters request
+ * @param response Simulation response indicating success or failure
+ * @return gRPC status indicating success or failure
+ */
 grpc::Status MCUSimulatorServiceImpl::SetSimulationParams(grpc::ServerContext* context,
                                                         const SimulationParams* request,
                                                         SimulationResponse* response) {
@@ -132,6 +175,17 @@ grpc::Status MCUSimulatorServiceImpl::SetSimulationParams(grpc::ServerContext* c
     }
 }
 
+/**
+ * @brief Handles SetMCUFault RPC requests
+ * 
+ * Sets the fault state of a specific MCU. When an MCU is set to faulty,
+ * all its sensors will report invalid readings.
+ * 
+ * @param context gRPC server context
+ * @param request MCU fault request containing MCU name and fault state
+ * @param response Fault response indicating success or failure
+ * @return gRPC status indicating success or failure
+ */
 grpc::Status MCUSimulatorServiceImpl::SetMCUFault(grpc::ServerContext* context,
                                                 const MCUFaultRequest* request,
                                                 FaultResponse* response) {
@@ -159,6 +213,17 @@ grpc::Status MCUSimulatorServiceImpl::SetMCUFault(grpc::ServerContext* context,
     }
 }
 
+/**
+ * @brief Handles SetSensorFault RPC requests
+ * 
+ * Sets the fault state of a specific sensor on a specific MCU. When a sensor
+ * is set to faulty, it will report invalid temperature readings.
+ * 
+ * @param context gRPC server context
+ * @param request Sensor fault request containing MCU name, sensor ID, and fault state
+ * @param response Fault response indicating success or failure
+ * @return gRPC status indicating success or failure
+ */
 grpc::Status MCUSimulatorServiceImpl::SetSensorFault(grpc::ServerContext* context,
                                                    const SensorFaultRequest* request,
                                                    FaultResponse* response) {
@@ -192,6 +257,17 @@ grpc::Status MCUSimulatorServiceImpl::SetSensorFault(grpc::ServerContext* contex
     }
 }
 
+/**
+ * @brief Handles SetSensorNoise RPC requests
+ * 
+ * Sets the noise state of a specific sensor on a specific MCU. When a sensor
+ * is set to noisy, it will add random variations to its temperature readings.
+ * 
+ * @param context gRPC server context
+ * @param request Sensor noise request containing MCU name, sensor ID, and noise state
+ * @param response Fault response indicating success or failure
+ * @return gRPC status indicating success or failure
+ */
 grpc::Status MCUSimulatorServiceImpl::SetSensorNoise(grpc::ServerContext* context,
                                                    const SensorNoiseRequest* request,
                                                    FaultResponse* response) {
@@ -212,6 +288,7 @@ grpc::Status MCUSimulatorServiceImpl::SetSensorNoise(grpc::ServerContext* contex
             response->set_message("Sensor not found: " + request->sensor_id());
             return grpc::Status(grpc::StatusCode::NOT_FOUND, "Sensor not found");
         }
+
         response->set_success(true);
         response->set_message("Sensor noise state updated successfully");
         response->set_current_state(request->is_noisy() ? "noisy" : "normal");

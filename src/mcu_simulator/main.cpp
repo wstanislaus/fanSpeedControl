@@ -8,12 +8,36 @@ namespace mcu_simulator {
 
 volatile bool running = true;
 
+/**
+ * @brief Signal handler for graceful shutdown
+ * 
+ * Handles SIGINT and SIGTERM signals to gracefully shut down the MCU simulator.
+ * Sets the running flag to false, which causes the main loop to exit.
+ * 
+ * @param signal_number The signal number that was received
+ */
 void signalHandler(int) {
     running = false;
 }
 
 } // namespace mcu_simulator
 
+/**
+ * @brief Main entry point for the MCU Simulator application
+ * 
+ * Initializes and runs the MCU Simulator which simulates temperature sensors
+ * and publishes temperature data via MQTT. The simulator can be controlled
+ * via RPC calls and provides realistic temperature sensor behavior.
+ * 
+ * Command line arguments:
+ * - Optional: Path to configuration file (defaults to /etc/fan_control_system/config.yaml)
+ * 
+ * The application handles SIGINT and SIGTERM signals for graceful shutdown.
+ * 
+ * @param argc Number of command line arguments
+ * @param argv Array of command line argument strings
+ * @return 0 on successful execution, 1 on error
+ */
 int main(int argc, char* argv[]) {
     // config file is optional if default config file is present in /etc/fan_control_system/config.yaml
     std::string config_file = "/etc/fan_control_system/config.yaml";

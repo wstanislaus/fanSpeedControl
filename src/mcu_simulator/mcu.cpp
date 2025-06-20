@@ -4,6 +4,7 @@
 #include "common/mqtt_client.hpp"
 #include "common/logger.hpp"
 #include "common/alarm.hpp"
+#include "common/utils.hpp"
 #include <thread>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -216,6 +217,7 @@ bool MCU::setSimulationParams(int sensor_id, double start_temp, double end_temp,
     sensors_[sensor_id - 1]->setSimulationParams(start_temp, end_temp, step_size);
     return true;
 }
+
 /**
  * @brief Formats a timestamp to a human-readable string
  * 
@@ -226,10 +228,7 @@ bool MCU::setSimulationParams(int sensor_id, double start_temp, double end_temp,
  * @return Formatted timestamp string
  */
 std::string MCU::formatTimestamp(const std::chrono::system_clock::time_point& tp) {
-    auto time = std::chrono::system_clock::to_time_t(tp);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
-    return ss.str();
+    return common::utils::formatTimestamp(tp);
 }
 
 /**

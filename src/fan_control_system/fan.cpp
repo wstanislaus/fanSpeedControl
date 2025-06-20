@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <nlohmann/json.hpp>
+#include "common/utils.hpp"
 
 using json = nlohmann::json;
 
@@ -86,7 +87,7 @@ bool Fan::initialize() {
         {"i2c_address", i2c_address_},
         {"pwm_reg", pwm_reg_},
         {"status", status_},
-        {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
+        {"timestamp", common::utils::formatTimestamp(std::chrono::system_clock::now())}
     };
     mqtt_client_->publish("fan/" + name_ + "/config", config_data.dump());
 
@@ -283,7 +284,7 @@ void Fan::publishStatus() {
         {"duty_cycle", current_duty_cycle_},
         {"i2c_address", i2c_address_},
         {"pwm_reg", pwm_reg_},
-        {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
+        {"timestamp", common::utils::formatTimestamp(std::chrono::system_clock::now())}
     };
 
     mqtt_client_->publish("fan/" + name_ + "/status", status_data.dump());

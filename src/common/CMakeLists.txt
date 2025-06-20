@@ -10,6 +10,7 @@ add_library(common SHARED
     alarm.cpp
     config.cpp
     rpc_server.cpp
+    utils.cpp
 )
 
 # Include directories

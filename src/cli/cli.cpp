@@ -7,12 +7,33 @@
 
 namespace cli {
 
+/**
+ * @brief Default constructor for CLI
+ * 
+ * Initializes the CLI with default values. The CLI is not fully initialized
+ * until the initialize() method is called with a configuration file path.
+ */
 CLI::CLI() = default;
 
+/**
+ * @brief Destructor for CLI
+ * 
+ * Ensures proper cleanup by stopping the CLI and disconnecting from any
+ * active services.
+ */
 CLI::~CLI() {
     stop();
 }
 
+/**
+ * @brief Initializes the CLI with configuration
+ * 
+ * Loads the configuration file and sets up the CLI for operation.
+ * This method must be called before using any CLI functionality.
+ * 
+ * @param config_path Path to the configuration file
+ * @return true if initialization was successful, false otherwise
+ */
 bool CLI::initialize(const std::string& config_path) {
     // Load configuration
     if (!common::Config::getInstance().load(config_path)) {

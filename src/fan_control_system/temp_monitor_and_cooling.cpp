@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <nlohmann/json.hpp>
+#include "common/utils.hpp"
 
 using json = nlohmann::json;
 
@@ -214,7 +215,7 @@ bool TempMonitorAndCooling::initialize() {
             {"fan_speed_max", fan_speed_max_},
             {"history_duration_minutes", history_duration_minutes},
             {"std_dev_threshold", std_dev_threshold_},
-            {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
+            {"timestamp", common::utils::formatTimestamp(std::chrono::system_clock::now())}
         };
         mqtt_client_->publish("temp_monitor/config", config_data.dump());
 
@@ -483,7 +484,7 @@ void TempMonitorAndCooling::update_fan_speed() {
         {"cooling_mode", new_status.cooling_mode},
         {"average_temperature", new_status.average_temperature},
         {"current_fan_speed", new_status.current_fan_speed},
-        {"timestamp", std::chrono::system_clock::to_time_t(std::chrono::system_clock::now())}
+        {"timestamp", common::utils::formatTimestamp(std::chrono::system_clock::now())}
     };
     mqtt_client_->publish("temp_monitor/cooling_status", temp_data.dump());
 }

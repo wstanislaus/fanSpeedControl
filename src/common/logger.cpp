@@ -1,7 +1,6 @@
 #include "common/logger.hpp"
+#include "common/utils.hpp"
 #include <chrono>
-#include <iomanip>
-#include <sstream>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -120,11 +119,7 @@ std::string Logger::formatMessage(LogLevel level, const std::string& message) {
  * @return Timestamp string in the format "YYYY-MM-DD HH:MM:SS"
  */
 std::string Logger::getTimestamp() {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%d %H:%M:%S");
-    return ss.str();
+    return utils::getCurrentTimestamp();
 }
 
 } // namespace common 

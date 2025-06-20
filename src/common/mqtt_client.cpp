@@ -3,7 +3,17 @@
 
 namespace common {
 
-// Static callback function that forwards to the instance callback
+/**
+ * @brief Static callback function that forwards MQTT messages to instance callbacks
+ * 
+ * This function is registered with the mosquitto library and forwards received
+ * MQTT messages to the appropriate instance callback function. It extracts the
+ * MQTTClient instance from the user data and calls the registered message callback.
+ * 
+ * @param mosq Pointer to the mosquitto instance
+ * @param obj User data pointer (contains the MQTTClient instance)
+ * @param msg Pointer to the received MQTT message
+ */
 void on_message(mosquitto* mosq, void* obj, const mosquitto_message* msg) {
     auto* client = static_cast<MQTTClient*>(obj);
     if (client && client->message_callback_) {

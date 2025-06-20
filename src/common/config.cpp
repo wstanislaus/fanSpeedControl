@@ -96,6 +96,15 @@ TemperatureSimConfig Config::getTemperatureSimConfig() const {
     return config;
 }
 
+/**
+ * @brief Gets the RPC server configuration for a specific server
+ * 
+ * Retrieves the RPC server configuration for the specified server name.
+ * The configuration includes port number and maximum connections settings.
+ * 
+ * @param server_name Name of the RPC server to get configuration for
+ * @return Pointer to RPCServerConfig if found, nullptr otherwise
+ */
 const RPCServerConfig* Config::getRPCServerConfig(const std::string& server_name) const {
     auto it = rpc_settings_.servers.find(server_name);
     if (it != rpc_settings_.servers.end()) {

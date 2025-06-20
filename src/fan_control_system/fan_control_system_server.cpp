@@ -5,8 +5,8 @@
 #include <iostream>
 #include "common/config.hpp"
 #include <chrono>
-#include <sstream>
-#include <iomanip>
+#include "common/utils.hpp"
+#include <grpcpp/grpcpp.h>
 
 namespace fan_control_system {
 
@@ -204,10 +204,7 @@ grpc::Status FanControlSystemServiceImpl::GetTemperatureHistory(grpc::ServerCont
         proto_reading->set_status(reading.status);
         
         // Convert timestamp to string
-        auto time_t = std::chrono::system_clock::to_time_t(reading.timestamp);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-        proto_reading->set_timestamp(ss.str());
+        proto_reading->set_timestamp(common::utils::formatTimestamp(reading.timestamp));
     }
     
     response->set_total_readings(temperature_history.size());
