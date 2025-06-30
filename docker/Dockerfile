@@ -9,7 +9,7 @@ ARG GROUP_ID
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Set LD_LIBRARY_PATH environment variable
-ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Install build essentials and required packages
 RUN apt-get update && apt-get install -y \
@@ -32,8 +32,14 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler-grpc \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a group with the specified group ID
-RUN groupadd -g ${GROUP_ID} developer
+# Create a group with the specified group ID, or use existing group if it already exists
+RUN if getent group ${GROUP_ID} > /dev/null 2>&1; then \
+        echo "Group with GID ${GROUP_ID} already exists, using it"; \
+        groupmod -n developer $(getent group ${GROUP_ID} | cut -d: -f1); \
+    else \
+        echo "Creating new group with GID ${GROUP_ID}"; \
+        groupadd -g ${GROUP_ID} developer; \
+    fi
 
 # Create a user with the specified user ID and group ID
 RUN useradd -u ${USER_ID} -g ${GROUP_ID} -m -s /bin/bash developer
