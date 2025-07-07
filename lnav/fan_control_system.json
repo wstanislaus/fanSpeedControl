@@ -1,0 +1,40 @@
+{
+    "fan_control_system_log": {
+      "title": "Fan Control System Log Navigator",
+      "description": "Fan Control System log format for log navigation",
+      "json": true,
+      "hide-extra": true,
+      "timestamp-field": "timestamp",
+      "level-field": "level",
+      "body-field": "message",
+      "opid-field": "source",
+      "line-format": [
+        "[",
+        {"field": "timestamp"},
+        "] ",
+        {"field": "level"},
+        " ",
+        {"field": "source"},
+        ": ",
+        {"field": "message"}
+      ],
+      "value": {
+        "timestamp": {
+          "kind": "string",
+          "identifier": true
+        },
+        "level": {
+          "kind": "string",
+          "identifier": true
+        },
+        "source": {
+          "kind": "string",
+          "identifier": true
+        },
+        "message": {
+          "kind": "string",
+          "identifier": true
+        }
+      }
+    }
+  }

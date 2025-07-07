@@ -1,0 +1,111 @@
+<mxfile host="65bd71144e">
+    <diagram name="Enhanced Architecture" id="0">
+        <mxGraphModel dx="1361" dy="1659" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="MCU Simulator" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;" parent="1" vertex="1">
+                    <mxGeometry x="10" y="110" width="150" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="MCU" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9E3;strokeColor=#D6B656;fontSize=12;" parent="2" vertex="1">
+                    <mxGeometry x="50" y="30" width="60" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="TemperatureSensor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9E3;strokeColor=#D6B656;fontSize=12;" parent="2" vertex="1">
+                    <mxGeometry x="20" y="70" width="120" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="MQTT Broker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="280" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="Fan Control System" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="110" width="300" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" value="FanControlSystem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3EAF7;strokeColor=#9673A6;fontSize=12;" parent="4" vertex="1">
+                    <mxGeometry x="20" y="30" width="110" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="13" value="Fan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3EAF7;strokeColor=#9673A6;fontSize=12;" parent="4" vertex="1">
+                    <mxGeometry x="20" y="70" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" value="TempMonitorAndCooling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3EAF7;strokeColor=#9673A6;fontSize=12;" parent="4" vertex="1">
+                    <mxGeometry x="140" y="30" width="150" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="AlarmManager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3EAF7;strokeColor=#9673A6;fontSize=12;" parent="4" vertex="1">
+                    <mxGeometry x="200" y="70" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" value="LogManager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3EAF7;strokeColor=#9673A6;fontSize=12;" parent="4" vertex="1">
+                    <mxGeometry x="110" y="70" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="CLI" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;" parent="1" vertex="1">
+                    <mxGeometry x="170" y="390" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" value="CLI (main)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF6E3;strokeColor=#D79B00;fontSize=12;" parent="5" vertex="1">
+                    <mxGeometry x="20" y="30" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="18" value="Common Utilities" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="-30" width="180" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="19" value="Config" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF6E3;strokeColor=#B85450;fontSize=12;" parent="18" vertex="1">
+                    <mxGeometry x="20" y="30" width="60" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="20" value="Logger" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF6E3;strokeColor=#B85450;fontSize=12;" parent="18" vertex="1">
+                    <mxGeometry x="100" y="30" width="60" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="21" value="MQTTClient" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF6E3;strokeColor=#B85450;fontSize=12;" parent="18" vertex="1">
+                    <mxGeometry x="7" y="80" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="MQTT: Temperature Readings" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;labelBackgroundColor=#FFF2CC;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="2" target="3" edge="1">
+                    <mxGeometry x="0.0054" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="7" value="MQTT: Temperature/Alarm Topics" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82B366;strokeWidth=2;labelBackgroundColor=#D5E8D4;" parent="1" source="3" target="4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="gRPC: Control/Status" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;dashed=1;labelBackgroundColor=#FFE6CC;" parent="1" source="5" target="2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="gRPC: Control/Status" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#9673A6;strokeWidth=2;dashed=1;labelBackgroundColor=#FFE6CC;" parent="1" source="5" target="4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="24" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#B85450;endArrow=block;exitX=0;exitY=0.25;exitDx=0;exitDy=0;" parent="1" source="18" target="2" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="240" y="-75" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="25" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#B85450;endArrow=block;exitX=1;exitY=0.25;exitDx=0;exitDy=0;" parent="1" source="18" target="4" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="460" y="-74" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="26" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#B85450;endArrow=block;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="1" source="18" target="5" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="370" y="80" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="100" value="Fan Speed Control Algorithm:&#xa;25°C → 20% duty&#xa;75°C → 100% duty&#xa;Linear interpolation in between&#xa;Formula:&#xa;duty = 20% + ((temp - 25) / (75 - 25)) * (100% - 20%)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5FE;strokeColor=#039BE5;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="620" y="-70" width="260" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="101" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#039BE5;dashed=1;endArrow=block;" parent="1" source="100" target="14" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="300" value="Proto / gRPC Services" style="swimlane;rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="350" y="450" width="340" height="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="301" value="MCUSimulator Service&lt;br&gt;• GetTemperature&lt;br&gt;• GetMCUStatus&lt;br&gt;• SetSimulationParams&lt;br&gt;• SetMCUFault&lt;div&gt;etc&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontSize=12;" parent="300" vertex="1">
+                    <mxGeometry x="20" y="40" width="140" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="302" value="FanControlSystem Service&lt;br&gt;• GetFanStatus&lt;br&gt;• SetFanSpeed&lt;br&gt;• GetAlarmStatus&lt;br&gt;•&amp;nbsp;GetCoolingStatus&lt;div&gt;etc&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1976D2;fontSize=12;" parent="300" vertex="1">
+                    <mxGeometry x="180" y="40" width="140" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="303" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;dashed=1;endArrow=block;" parent="1" source="301" target="2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="304" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#1976D2;dashed=1;endArrow=block;" parent="1" source="302" target="4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="305" value="RPC Server" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF6E3;strokeColor=#B85450;fontSize=12;" vertex="1" parent="1">
+                    <mxGeometry x="373" y="50" width="80" height="30" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

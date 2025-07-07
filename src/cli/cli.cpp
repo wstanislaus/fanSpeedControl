@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 
 namespace cli {
@@ -65,38 +66,47 @@ ServiceType CLI::selectService() {
 }
 
 bool CLI::connectToService(ServiceType service) {
-    disconnectFromService();
-    
-    const auto* server_config = common::Config::getInstance().getRPCServerConfig(
-        service == ServiceType::MCU_SIMULATOR ? "MCUSimulator" : "FanControlSystem");
-    
-    if (!server_config) {
-        std::cerr << "RPC server configuration not found" << std::endl;
-        return false;
-    }
-
-    std::string target = "localhost:" + std::to_string(server_config->port);
-    
-    if (service == ServiceType::MCU_SIMULATOR) {
-        mcu_channel_ = grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+    // Always maintain connections to both services
+    if (!mcu_channel_ || !mcu_stub_) {
+        const auto* mcu_config = common::Config::getInstance().getRPCServerConfig("MCUSimulator");
+        if (!mcu_config) {
+            std::cerr << "MCU Simulator RPC server configuration not found" << std::endl;
+            return false;
+        }
+        
+        std::string mcu_target = "localhost:" + std::to_string(mcu_config->port);
+        mcu_channel_ = grpc::CreateChannel(mcu_target, grpc::InsecureChannelCredentials());
         if (!mcu_channel_) {
+            std::cerr << "Failed to create MCU Simulator channel" << std::endl;
             return false;
         }
         mcu_stub_ = mcu_simulator::MCUSimulatorService::NewStub(mcu_channel_);
         if (!mcu_stub_) {
+            std::cerr << "Failed to create MCU Simulator stub" << std::endl;
             return false;
         }
-        std::cout << "Connected to MCU Simulator service (localhost:" << server_config->port << ")" << std::endl;
-    } else {
-        fan_channel_ = grpc::CreateChannel(target, grpc::InsecureChannelCredentials());
+        std::cout << "Connected to MCU Simulator service (localhost:" << mcu_config->port << ")" << std::endl;
+    }
+    
+    if (!fan_channel_ || !fan_stub_) {
+        const auto* fan_config = common::Config::getInstance().getRPCServerConfig("FanControlSystem");
+        if (!fan_config) {
+            std::cerr << "Fan Control System RPC server configuration not found" << std::endl;
+            return false;
+        }
+        
+        std::string fan_target = "localhost:" + std::to_string(fan_config->port);
+        fan_channel_ = grpc::CreateChannel(fan_target, grpc::InsecureChannelCredentials());
         if (!fan_channel_) {
+            std::cerr << "Failed to create Fan Control System channel" << std::endl;
             return false;
         }
         fan_stub_ = fan_control_system::FanControlSystemService::NewStub(fan_channel_);
         if (!fan_stub_) {
+            std::cerr << "Failed to create Fan Control System stub" << std::endl;
             return false;
         }
-        std::cout << "Connected to Fan Control System service (localhost:" << server_config->port << ")" << std::endl;
+        std::cout << "Connected to Fan Control System service (localhost:" << fan_config->port << ")" << std::endl;
     }
     
     current_service_ = service;
@@ -104,11 +114,13 @@ bool CLI::connectToService(ServiceType service) {
 }
 
 void CLI::disconnectFromService() {
-    if (current_service_ == ServiceType::MCU_SIMULATOR) {
+    // Only disconnect when stopping the CLI completely
+    if (mcu_channel_) {
         mcu_channel_.reset();
         mcu_stub_.reset();
         std::cout << "Disconnected from MCU Simulator service" << std::endl;
-    } else if (current_service_ == ServiceType::FAN_CONTROL_SYSTEM) {
+    }
+    if (fan_channel_) {
         fan_channel_.reset();
         fan_stub_.reset();
         std::cout << "Disconnected from Fan Control System service" << std::endl;
@@ -194,11 +206,13 @@ void CLI::processCommand(const std::string& command) {
 
 void CLI::processMCUCommand(const std::string& cmd, std::istringstream& iss) {
     if (cmd == "get_temp") {
-        std::string mcu_name, sensor_id;
-        if (iss >> mcu_name >> sensor_id) {
-            getTemperature(mcu_name, sensor_id);
+        std::string mcu_name;
+        if (iss >> mcu_name) {
+            // One parameter: get_temp <mcu_name> - get all sensors for this MCU
+            getAllTemperatures(mcu_name);
         } else {
-            std::cout << "Usage: get_temp <mcu_name> <sensor_id>" << std::endl;
+            // No parameters: get_temp - get all MCUs and all sensors
+            getAllTemperatures();
         }
     }
     else if (cmd == "get_mcu_status") {
@@ -210,12 +224,29 @@ void CLI::processMCUCommand(const std::string& cmd, std::istringstream& iss) {
         }
     }
     else if (cmd == "set_sim_params") {
-        std::string mcu_name, sensor_id;
         double start_temp, end_temp, step_size;
-        if (iss >> mcu_name >> sensor_id >> start_temp >> end_temp >> step_size) {
-            setSimulationParams(mcu_name, sensor_id, start_temp, end_temp, step_size);
+        std::string mcu_name, sensor_id;
+        
+        // Try to parse the required temperature parameters first
+        if (iss >> start_temp >> end_temp >> step_size) {
+            // Check if optional mcu_name and sensor_id are provided
+            if (iss >> mcu_name) {
+                if (iss >> sensor_id) {
+                    // Both mcu_name and sensor_id provided
+                    setSimulationParams(mcu_name, sensor_id, start_temp, end_temp, step_size);
+                } else {
+                    // Only mcu_name provided, apply to all sensors on that MCU
+                    setSimulationParamsForMCU(mcu_name, start_temp, end_temp, step_size);
+                }
+            } else {
+                // No mcu_name provided, apply to all MCUs and sensors
+                setSimulationParamsForAll(start_temp, end_temp, step_size);
+            }
         } else {
-            std::cout << "Usage: set_sim_params <mcu_name> <sensor_id> <start_temp> <end_temp> <step_size>" << std::endl;
+            std::cout << "Usage: set_sim_params <start_temp> <end_temp> <step_size> [mcu_name] [sensor_id]" << std::endl;
+            std::cout << "  - If no mcu_name provided: applies to all MCUs and sensors" << std::endl;
+            std::cout << "  - If mcu_name provided but no sensor_id: applies to all sensors on that MCU" << std::endl;
+            std::cout << "  - If both provided: applies to specific sensor only" << std::endl;
         }
     }
     else if (cmd == "set_mcu_fault") {
@@ -307,18 +338,12 @@ void CLI::processFanCommand(const std::string& cmd, std::istringstream& iss) {
         if (iss >> fan_name) {
             getFanNoise(fan_name);
         } else {
-            std::cout << "Usage: get_fan_noise <fan_name>" << std::endl;
+            getFanNoise(); // Get noise for all fans
         }
     }
     // Temperature operations
     else if (cmd == "get_temp_history") {
-        std::string mcu_name, sensor_id;
-        int32_t max_readings;
-        if (iss >> mcu_name >> sensor_id >> max_readings) {
-            getTemperatureHistory(mcu_name, sensor_id, max_readings);
-        } else {
-            std::cout << "Usage: get_temp_history <mcu> <sensor> <count>" << std::endl;
-        }
+        getTemperatureHistory();
     }
     else if (cmd == "get_cooling_status") {
         getCoolingStatus();
@@ -349,7 +374,8 @@ void CLI::processFanCommand(const std::string& cmd, std::istringstream& iss) {
         if (iss >> max_entries) {
             getAlarmHistory(max_entries);
         } else {
-            std::cout << "Usage: get_alarm_history <count>" << std::endl;
+            // No count provided, get all available history
+            getAlarmHistory();
         }
     }
     else if (cmd == "clear_alarm_history") {
@@ -393,9 +419,9 @@ void CLI::showMCUHelp() {
     std::cout << "  help  - Show this help message" << std::endl;
     std::cout << "  exit  - Return to main menu" << std::endl;
     std::cout << "  quit  - Exit the application" << std::endl;
-    std::cout << "  get_temp <mcu_name> <sensor_id>  - Get temperature from a specific sensor" << std::endl;
+    std::cout << "  get_temp [mcu_name]  - Get temperatures from all MCUs or a specific MCU" << std::endl;
     std::cout << "  get_mcu_status [mcu_name]  - Get status of all MCUs or a specific MCU" << std::endl;
-    std::cout << "  set_sim_params <mcu_name> <sensor_id> <start_temp> <end_temp> <step_size>  - Set simulation parameters" << std::endl;
+    std::cout << "  set_sim_params <start_temp> <end_temp> <step_size> [mcu_name] [sensor_id]  - Set simulation parameters" << std::endl;
     std::cout << "  set_mcu_fault <mcu_name> <is_faulty>  - Set MCU fault state (0=normal, 1=faulty)" << std::endl;
     std::cout << "  set_sensor_fault <mcu_name> <sensor_id> <is_faulty>  - Set sensor fault state (0=normal, 1=faulty)" << std::endl;
     std::cout << "  set_sensor_noise <mcu_name> <sensor_id> <is_noisy>  - Set sensor noise state (0=normal, 1=noisy)" << std::endl;
@@ -410,17 +436,17 @@ void CLI::showFanHelp() {
     std::cout << "  set_fan_pwm <fan_name> <pwm_count>  - Set fan PWM" << std::endl;
     std::cout << "  make_fan_bad <fan_name>             - Make fan faulty" << std::endl;
     std::cout << "  make_fan_good <fan_name>            - Restore fan" << std::endl;
-    std::cout << "  get_fan_noise <fan_name>            - Get noise level" << std::endl;
+    std::cout << "  get_fan_noise [fan_name]            - Get noise level" << std::endl;
     std::cout << std::endl;
     std::cout << "  # Temperature operations" << std::endl;
-    std::cout << "  get_temp_history <mcu> <sensor> <count> - Get temperature history" << std::endl;
+    std::cout << "  get_temp_history                    - Get temperature history for all sensors" << std::endl;
     std::cout << "  get_cooling_status                  - Get cooling status" << std::endl;
     std::cout << "  set_temp_thresholds <low> <high> <min_speed> <max_speed> - Set thresholds" << std::endl;
     std::cout << "  get_temp_thresholds                 - Get current thresholds" << std::endl;
     std::cout << std::endl;
     std::cout << "  # Alarm operations" << std::endl;
     std::cout << "  raise_alarm <name> <message> <severity> - Raise alarm" << std::endl;
-    std::cout << "  get_alarm_history <count>           - Get alarm history" << std::endl;
+    std::cout << "  get_alarm_history [count]           - Get alarm history (all if no count)" << std::endl;
     std::cout << "  clear_alarm_history [alarm_name]    - Clear alarm history (all if no name)" << std::endl;
     std::cout << "  get_alarm_statistics [alarm_name] [time_window_hours] - Get alarm statistics" << std::endl;
     std::cout << std::endl;
@@ -455,6 +481,68 @@ void CLI::getTemperature(const std::string& mcu_name, const std::string& sensor_
     }
 }
 
+void CLI::getAllTemperatures(const std::string& mcu_name) {
+    // First get MCU status to find all sensors
+    mcu_simulator::StatusRequest status_request;
+    status_request.set_mcu_name(mcu_name); // Empty string for all MCUs
+
+    mcu_simulator::StatusResponse status_response;
+    grpc::ClientContext status_context;
+
+    grpc::Status status_status = mcu_stub_->GetMCUStatus(&status_context, status_request, &status_response);
+    if (!status_status.ok()) {
+        std::cout << "Failed to get MCU status: " << status_status.error_message() << std::endl;
+        return;
+    }
+
+    if (status_response.mcu_status_size() == 0) {
+        if (mcu_name.empty()) {
+            std::cout << "No MCUs found" << std::endl;
+        } else {
+            std::cout << "MCU not found: " << mcu_name << std::endl;
+        }
+        return;
+    }
+
+    // Process each MCU
+    for (const auto& mcu_status : status_response.mcu_status()) {
+        std::cout << mcu_status.mcu_name() << ":" << std::endl;
+
+        // Get temperature for each sensor
+        for (const auto& sensor : mcu_status.sensors()) {
+            std::string sensor_id = sensor.sensor_id();
+            
+            // Check if sensor is active from the status response
+            if (!sensor.is_active()) {
+                std::cout << "    Sensor" << sensor_id << ": 0.0°C (Bad) - Faulty sensor" << std::endl;
+                continue;
+            }
+            
+            mcu_simulator::TemperatureRequest temp_request;
+            temp_request.set_mcu_name(mcu_status.mcu_name());
+            temp_request.set_sensor_id(sensor_id);
+
+            mcu_simulator::TemperatureResponse temp_response;
+            grpc::ClientContext temp_context;
+
+            grpc::Status temp_status = mcu_stub_->GetTemperature(&temp_context, temp_request, &temp_response);
+            
+            if (temp_status.ok()) {
+                if (temp_response.is_valid()) {
+                    // Check if sensor is noisy from the status response
+                    std::string status_indicator = sensor.is_noisy() ? "(Noisy)" : "(Good)";
+                    std::cout << "    Sensor" << sensor_id << ": " << temp_response.temperature() << "°C " << status_indicator << std::endl;
+                } else {
+                    std::cout << "    Sensor" << sensor_id << ": 0.0°C (Bad) - Faulty sensor" << std::endl;
+                }
+            } else {
+                std::cout << "    Sensor" << sensor_id << ": 0.0°C (Bad) - Communication error" << std::endl;
+            }
+        }
+        std::cout << std::endl; // Add blank line between MCUs
+    }
+}
+
 void CLI::getMCUStatus(const std::string& mcu_name) {
     mcu_simulator::StatusRequest request;
     request.set_mcu_name(mcu_name);
@@ -469,18 +557,13 @@ void CLI::getMCUStatus(const std::string& mcu_name) {
             return;
         }
 
+        std::cout << "=== MCU Status Report ===" << std::endl;
         for (const auto& mcu_status : response.mcu_status()) {
-            std::cout << "MCU: " << mcu_status.mcu_name() << std::endl;
-            std::cout << "  Online: " << (mcu_status.is_online() ? "Yes" : "No") << std::endl;
-            std::cout << "  Active Sensors: " << mcu_status.active_sensors() << std::endl;
-            std::cout << "  Sensors:" << std::endl;
-            for (const auto& sensor : mcu_status.sensors()) {
-                std::cout << "    ID: " << sensor.sensor_id() << std::endl;
-                std::cout << "    Active: " << (sensor.is_active() ? "Yes" : "No") << std::endl;
-                std::cout << "    Interface: " << sensor.interface() << std::endl;
-                std::cout << "    Address: " << sensor.address() << std::endl;
-                std::cout << "    Noisy: " << (sensor.is_noisy() ? "Yes" : "No") << std::endl;
-            }
+            std::cout << mcu_status.mcu_name() << ":" << std::endl;
+            std::cout << "  - Status: " << (mcu_status.is_online() ? "Online" : "Offline") << std::endl;
+            std::cout << "  - Sensors: " << mcu_status.active_sensors() << "/" << mcu_status.sensors_size() << " Good" << std::endl;
+            std::cout << "  - Last Update: " << mcu_status.last_update_time() << std::endl;
+            std::cout << "  - Publish Interval: " << mcu_status.publish_interval() << "s" << std::endl;
             std::cout << std::endl;
         }
     } else {
@@ -502,13 +585,115 @@ void CLI::setSimulationParams(const std::string& mcu_name, const std::string& se
     grpc::Status status = mcu_stub_->SetSimulationParams(&context, request, &response);
     if (status.ok()) {
         if (response.success()) {
-            std::cout << "Simulation parameters set successfully" << std::endl;
+            std::cout << "Simulation parameters set successfully for " << mcu_name << ":" << sensor_id << std::endl;
         } else {
             std::cout << "Error: " << response.message() << std::endl;
         }
     } else {
         std::cout << "RPC failed: " << status.error_message() << std::endl;
     }
+}
+
+void CLI::setSimulationParamsForMCU(const std::string& mcu_name, double start_temp, double end_temp, double step_size) {
+    // First get MCU status to find all sensors
+    mcu_simulator::StatusRequest status_request;
+    status_request.set_mcu_name(mcu_name);
+
+    mcu_simulator::StatusResponse status_response;
+    grpc::ClientContext status_context;
+
+    grpc::Status status_status = mcu_stub_->GetMCUStatus(&status_context, status_request, &status_response);
+    if (!status_status.ok()) {
+        std::cout << "Failed to get MCU status: " << status_status.error_message() << std::endl;
+        return;
+    }
+
+    if (status_response.mcu_status_size() == 0) {
+        std::cout << "MCU not found: " << mcu_name << std::endl;
+        return;
+    }
+
+    // Apply simulation parameters to all sensors on this MCU
+    int success_count = 0;
+    int total_sensors = 0;
+    
+    for (const auto& mcu_status : status_response.mcu_status()) {
+        for (const auto& sensor : mcu_status.sensors()) {
+            total_sensors++;
+            
+            mcu_simulator::SimulationParams request;
+            request.set_mcu_name(mcu_name);
+            request.set_sensor_id(sensor.sensor_id());
+            request.set_start_temp(start_temp);
+            request.set_end_temp(end_temp);
+            request.set_step_size(step_size);
+
+            mcu_simulator::SimulationResponse response;
+            grpc::ClientContext context;
+
+            grpc::Status status = mcu_stub_->SetSimulationParams(&context, request, &response);
+            if (status.ok() && response.success()) {
+                success_count++;
+            } else {
+                std::cout << "Failed to set parameters for sensor " << sensor.sensor_id() << ": " 
+                          << (status.ok() ? response.message() : status.error_message()) << std::endl;
+            }
+        }
+    }
+    
+    std::cout << "Simulation parameters set for " << success_count << "/" << total_sensors 
+              << " sensors on MCU " << mcu_name << std::endl;
+}
+
+void CLI::setSimulationParamsForAll(double start_temp, double end_temp, double step_size) {
+    // First get status of all MCUs to find all sensors
+    mcu_simulator::StatusRequest status_request;
+    status_request.set_mcu_name(""); // Empty name means get all MCUs
+
+    mcu_simulator::StatusResponse status_response;
+    grpc::ClientContext status_context;
+
+    grpc::Status status_status = mcu_stub_->GetMCUStatus(&status_context, status_request, &status_response);
+    if (!status_status.ok()) {
+        std::cout << "Failed to get MCU status: " << status_status.error_message() << std::endl;
+        return;
+    }
+
+    if (status_response.mcu_status_size() == 0) {
+        std::cout << "No MCUs found" << std::endl;
+        return;
+    }
+
+    // Apply simulation parameters to all sensors on all MCUs
+    int success_count = 0;
+    int total_sensors = 0;
+    
+    for (const auto& mcu_status : status_response.mcu_status()) {
+        for (const auto& sensor : mcu_status.sensors()) {
+            total_sensors++;
+            
+            mcu_simulator::SimulationParams request;
+            request.set_mcu_name(mcu_status.mcu_name());
+            request.set_sensor_id(sensor.sensor_id());
+            request.set_start_temp(start_temp);
+            request.set_end_temp(end_temp);
+            request.set_step_size(step_size);
+
+            mcu_simulator::SimulationResponse response;
+            grpc::ClientContext context;
+
+            grpc::Status status = mcu_stub_->SetSimulationParams(&context, request, &response);
+            if (status.ok() && response.success()) {
+                success_count++;
+            } else {
+                std::cout << "Failed to set parameters for " << mcu_status.mcu_name() << ":" << sensor.sensor_id() << ": " 
+                          << (status.ok() ? response.message() : status.error_message()) << std::endl;
+            }
+        }
+    }
+    
+    std::cout << "Simulation parameters set for " << success_count << "/" << total_sensors 
+              << " sensors across all MCUs" << std::endl;
 }
 
 void CLI::setMCUFault(const std::string& mcu_name, bool is_faulty) {
@@ -587,17 +772,13 @@ void CLI::getFanStatus(const std::string& fan_name) {
     grpc::Status status = fan_stub_->GetFanStatus(&context, request, &response);
     if (status.ok()) {
         for (const auto& fan : response.fans()) {
-            std::cout << "Fan: " << fan.name() << std::endl;
-            std::cout << "  Model: " << fan.model() << std::endl;
-            std::cout << "  Online: " << (fan.is_online() ? "Yes" : "No") << std::endl;
-            std::cout << "  Duty Cycle: " << fan.current_duty_cycle() << std::endl;
-            std::cout << "  PWM Count: " << fan.current_pwm() << std::endl;
-            std::cout << "  Noise Level (dB): " << fan.noise_level_db() << std::endl;
-            std::cout << "  Status: " << fan.status() << std::endl;
-            std::cout << "  Interface: " << fan.interface() << std::endl;
-            std::cout << "  I2C Address: 0x" << std::hex << fan.i2c_address() << std::dec << std::endl;
-            std::cout << "  PWM Range: " << fan.pwm_min() << "-" << fan.pwm_max() << std::endl;
-            std::cout << "  Duty Cycle Range: " << fan.duty_cycle_min() << "%-" << fan.duty_cycle_max() << "%" << std::endl;
+            std::cout << fan.name() << " (" << fan.model() << "):" << std::endl;
+            std::cout << "  - Status: " << (fan.is_online() ? "Online" : "Offline") << std::endl;
+            std::cout << "  - Duty Cycle: " << fan.current_duty_cycle() << "%" << std::endl;
+            std::cout << "  - PWM Count: " << fan.current_pwm() << std::endl;
+            std::cout << "  - Noise Level: " << fan.noise_level_db() << " dB" << std::endl;
+            std::cout << "  - Health: " << (fan.status() == "Good" ? "Good" : "Bad") << std::endl;
+            std::cout << "  - Model: " << fan.model() << " (" << fan.pwm_min() << "-" << fan.pwm_max() << ")" << std::endl;
             std::cout << std::endl;
         }
     } else {
@@ -752,30 +933,142 @@ void CLI::getFanNoise(const std::string& fan_name) {
     }
 }
 
-void CLI::getTemperatureHistory(const std::string& mcu_name, const std::string& sensor_id, int32_t max_readings) {
-    fan_control_system::TemperatureHistoryRequest request;
-    request.set_mcu_name(mcu_name);
-    request.set_sensor_id(std::stoi(sensor_id));
-    request.set_max_readings(max_readings);
+void CLI::getFanNoise() {
+    // First get fan status to discover all available fans
+    fan_control_system::FanStatusRequest status_request;
+    status_request.set_fan_name(""); // Empty name means get all fans
 
-    fan_control_system::TemperatureHistoryResponse response;
-    grpc::ClientContext context;
+    fan_control_system::FanStatusResponse status_response;
+    grpc::ClientContext status_context;
 
-    grpc::Status status = fan_stub_->GetTemperatureHistory(&context, request, &response);
-    if (status.ok()) {
-        std::cout << "Temperature History for " << mcu_name << ":" << sensor_id << std::endl;
-        std::cout << "Total readings: " << response.total_readings() << std::endl;
-        std::cout << std::endl;
+    grpc::Status status_status = fan_stub_->GetFanStatus(&status_context, status_request, &status_response);
+    if (!status_status.ok()) {
+        std::cout << "Failed to get fan status: " << status_status.error_message() << std::endl;
+        return;
+    }
+
+    if (status_response.fans_size() == 0) {
+        std::cout << "No fans found" << std::endl;
+        return;
+    }
+
+    // Get noise level for each fan
+    int success_count = 0;
+    int total_fans = status_response.fans_size();
+    
+    for (const auto& fan : status_response.fans()) {
+        std::string fan_name = fan.name();
         
-        for (const auto& reading : response.readings()) {
-            std::cout << "Timestamp: " << reading.timestamp() << std::endl;
-            std::cout << "  Temperature: " << reading.temperature() << "°C" << std::endl;
-            std::cout << "  Status: " << reading.status() << std::endl;
+        fan_control_system::FanNoiseRequest request;
+        request.set_fan_name(fan_name);
+
+        fan_control_system::FanNoiseResponse response;
+        grpc::ClientContext context;
+
+        grpc::Status status = fan_stub_->GetFanNoiseLevel(&context, request, &response);
+        if (status.ok()) {
+            success_count++;
+            std::cout << "Fan: " << fan_name << " (" << fan.model() << ")" << std::endl;
+            std::cout << "  Noise Level: " << response.noise_level_db() << " dB" << std::endl;
+            std::cout << "  Noise Category: " << response.noise_category() << std::endl;
+            std::cout << std::endl;
+        } else {
+            std::cout << "Fan: " << fan_name << " (" << fan.model() << ") - Failed to get noise level: " << status.error_message() << std::endl;
             std::cout << std::endl;
         }
-    } else {
-        std::cout << "RPC failed: " << status.error_message() << std::endl;
     }
+    
+    if (success_count > 0) {
+        std::cout << "Successfully retrieved noise levels for " << success_count << "/" << total_fans << " fans" << std::endl;
+    }
+}
+
+void CLI::getTemperatureHistory() {
+    // First, discover available MCUs from MCU Simulator
+    mcu_simulator::StatusRequest mcu_request;
+    mcu_request.set_mcu_name(""); // Empty name means get all MCUs
+    
+    mcu_simulator::StatusResponse mcu_response;
+    grpc::ClientContext mcu_context;
+    
+    grpc::Status mcu_status = mcu_stub_->GetMCUStatus(&mcu_context, mcu_request, &mcu_response);
+    if (!mcu_status.ok()) {
+        std::cout << "Failed to discover MCUs: " << mcu_status.error_message() << std::endl;
+        std::cout << "Make sure MCU Simulator is running on port 50051" << std::endl;
+        return;
+    }
+    
+    if (mcu_response.mcu_status_size() == 0) {
+        std::cout << "No MCUs discovered. Make sure MCU Simulator is running and has MCUs configured." << std::endl;
+        return;
+    }
+    
+    std::map<std::string, std::vector<fan_control_system::ProtoTemperatureReading>> mcu_readings;
+    double max_temp = -999.0;
+    bool has_data = false;
+    
+    // Query temperature history for each discovered MCU and sensor
+    for (const auto& mcu_status : mcu_response.mcu_status()) {
+        const std::string& mcu_name = mcu_status.mcu_name();
+        
+        for (const auto& sensor : mcu_status.sensors()) {
+            int sensor_id = std::stoi(sensor.sensor_id());
+            
+            fan_control_system::TemperatureHistoryRequest request;
+            request.set_mcu_name(mcu_name);
+            request.set_sensor_id(sensor_id);
+            request.set_max_readings(1); // Get enough readings for cooling calculation
+            
+            fan_control_system::TemperatureHistoryResponse response;
+            grpc::ClientContext context;
+            
+            grpc::Status status = fan_stub_->GetTemperatureHistory(&context, request, &response);
+            if (status.ok() && response.readings_size() > 0) {
+                has_data = true;
+                const auto& reading = response.readings(0);
+                mcu_readings[mcu_name].push_back(reading);
+                
+                if (reading.temperature() > max_temp) {
+                    max_temp = reading.temperature();
+                }
+            }
+    }
+    }
+    if (!has_data) {
+        std::cout << "No temperature history data available. Make sure Fan Control System is running and has received temperature data from MCU Simulator." << std::endl;
+        return;
+    }
+    
+    // Display grouped by MCU
+    for (const auto& mcu_pair : mcu_readings) {
+        std::cout << mcu_pair.first << ":" << std::endl;
+        
+        // Group by sensor within this MCU
+        std::map<std::string, std::vector<fan_control_system::ProtoTemperatureReading>> sensor_readings;
+        for (const auto& reading : mcu_pair.second) {
+            sensor_readings[std::to_string(reading.sensor_id())].push_back(reading);
+        }
+        
+        // Display each sensor's latest reading
+        for (const auto& sensor_pair : sensor_readings) {
+            if (!sensor_pair.second.empty()) {
+                const auto& latest = sensor_pair.second.back(); // Get the latest reading
+                std::cout << "  - " << latest.sensor_id() << ": " 
+                          << latest.temperature() << "°C (" 
+                          << (latest.status() == "Good" ? "Good" : "Bad") << ") - Last: " 
+                          << latest.timestamp() << std::endl;
+            }
+        }
+        std::cout << std::endl;
+    }
+    
+    // Display summary information
+    if (max_temp > -999.0) {
+        std::cout << "Max Temperature: " << max_temp << "°C" << std::endl;
+    }
+    
+    // Get current fan duty cycle and algorithm status
+    getCoolingStatus();
 }
 
 void CLI::getCoolingStatus() {
@@ -874,6 +1167,22 @@ void CLI::raiseAlarm(const std::string& alarm_name, const std::string& message, 
     }
 }
 
+// Helper function to convert severity enum to string
+std::string CLI::severityToString(fan_control_system::ProtoAlarmSeverity severity) {
+    switch (severity) {
+        case fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_INFO:
+            return "INFO";
+        case fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_WARNING:
+            return "WARNING";
+        case fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_ERROR:
+            return "ERROR";
+        case fan_control_system::ProtoAlarmSeverity::PROTO_ALARM_CRITICAL:
+            return "CRITICAL";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 void CLI::getAlarmHistory(int32_t max_entries) {
     fan_control_system::AlarmHistoryRequest request;
     request.set_alarm_name(""); // Empty name means get all alarms
@@ -889,15 +1198,23 @@ void CLI::getAlarmHistory(int32_t max_entries) {
         std::cout << std::endl;
         
         for (const auto& entry : response.entries()) {
-            std::cout << "Timestamp: " << entry.timestamp() << std::endl;
-            std::cout << "  Alarm: " << entry.alarm_name() << std::endl;
+            std::cout << "Alarm: " << entry.alarm_name() << std::endl;
             std::cout << "  Message: " << entry.message() << std::endl;
-            std::cout << "  Severity: " << entry.severity() << std::endl;
+            std::cout << "  Severity: " << severityToString(entry.severity()) << std::endl;
+            std::cout << "  First Occurrence: " << entry.first_timestamp() << std::endl;
+            std::cout << "  Latest Occurrence: " << entry.latest_timestamp() << std::endl;
+            std::cout << "  Occurrence Count: " << entry.occurrence_count() << std::endl;
+            std::cout << "  Acknowledged: " << (entry.was_acknowledged() ? "Yes" : "No") << std::endl;
             std::cout << std::endl;
         }
     } else {
         std::cout << "RPC failed: " << status.error_message() << std::endl;
     }
+}
+
+void CLI::getAlarmHistory() {
+    // Call the overloaded version with -1 to get all entries
+    getAlarmHistory(-1);
 }
 
 void CLI::clearAlarmHistory(const std::string& alarm_name) {
@@ -940,6 +1257,7 @@ void CLI::getAlarmStatistics(const std::string& alarm_name, int32_t time_window_
             std::cout << "  Total Count: " << stat.total_count() << std::endl;
             std::cout << "  Active Count: " << stat.active_count() << std::endl;
             std::cout << "  Acknowledged Count: " << stat.acknowledged_count() << std::endl;
+            std::cout << "  Total Occurrences: " << stat.total_occurrences() << std::endl;
             std::cout << "  First Occurrence: " << stat.first_occurrence() << std::endl;
             std::cout << "  Last Occurrence: " << stat.last_occurrence() << std::endl;
             

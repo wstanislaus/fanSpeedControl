@@ -136,6 +136,13 @@ private:
     void getTemperature(const std::string& mcu_name, const std::string& sensor_id);
 
     /**
+     * @brief Gets temperatures from all sensors on a specific MCU or all MCUs
+     * @param mcu_name Name of the MCU to query (empty string for all MCUs)
+     * @note This method calls the MCU Simulator service to retrieve temperature readings from all sensors
+     */
+    void getAllTemperatures(const std::string& mcu_name = "");
+
+    /**
      * @brief Gets the status of MCU(s)
      * @param mcu_name Optional MCU name filter, empty string for all MCUs
      * @note This method retrieves operational status and configuration of MCU(s)
@@ -152,6 +159,25 @@ private:
      * @note This method configures how the temperature sensor generates simulated values
      */
     void setSimulationParams(const std::string& mcu_name, const std::string& sensor_id, double start_temp, double end_temp, double step_size);
+
+    /**
+     * @brief Sets simulation parameters for all sensors on a specific MCU
+     * @param mcu_name Name of the MCU to configure
+     * @param start_temp Starting temperature for simulation
+     * @param end_temp Ending temperature for simulation
+     * @param step_size Temperature step size for simulation
+     * @note This method configures all sensors on the specified MCU with the same simulation parameters
+     */
+    void setSimulationParamsForMCU(const std::string& mcu_name, double start_temp, double end_temp, double step_size);
+
+    /**
+     * @brief Sets simulation parameters for all sensors on all MCUs
+     * @param start_temp Starting temperature for simulation
+     * @param end_temp Ending temperature for simulation
+     * @param step_size Temperature step size for simulation
+     * @note This method configures all sensors across all MCUs with the same simulation parameters
+     */
+    void setSimulationParamsForAll(double start_temp, double end_temp, double step_size);
 
     /**
      * @brief Sets fault condition for an MCU
@@ -230,15 +256,18 @@ private:
      * @note This method retrieves acoustic noise measurements from the fan
      */
     void getFanNoise(const std::string& fan_name);
+
+    /**
+     * @brief Gets noise level information for all fans
+     * @note This method retrieves acoustic noise measurements from all available fans
+     */
+    void getFanNoise();
     
     /**
-     * @brief Gets temperature history from a sensor
-     * @param mcu_name Name of the MCU containing the sensor
-     * @param sensor_id ID of the temperature sensor
-     * @param max_readings Maximum number of historical readings to retrieve
-     * @note This method retrieves historical temperature data for analysis
+     * @brief Gets temperature history from all sensors
+     * @note This method retrieves historical temperature data for all MCUs and sensors
      */
-    void getTemperatureHistory(const std::string& mcu_name, const std::string& sensor_id, int32_t max_readings);
+    void getTemperatureHistory();
 
     /**
      * @brief Gets the current cooling system status
@@ -272,11 +301,17 @@ private:
     void raiseAlarm(const std::string& alarm_name, const std::string& message, const std::string& severity);
 
     /**
-     * @brief Gets alarm history
+     * @brief Gets alarm history with optional count limit
      * @param max_entries Maximum number of alarm entries to retrieve
      * @note This method retrieves historical alarm data for analysis
      */
     void getAlarmHistory(int32_t max_entries);
+
+    /**
+     * @brief Gets all available alarm history
+     * @note This method retrieves all alarm history from the Fan Control System service
+     */
+    void getAlarmHistory();
 
     /**
      * @brief Clears alarm history
@@ -292,6 +327,14 @@ private:
      * @note This method provides statistical analysis of alarm occurrences
      */
     void getAlarmStatistics(const std::string& alarm_name = "", int32_t time_window_hours = 24);
+
+    /**
+     * @brief Converts alarm severity enum to string representation
+     * @param severity The severity enum value to convert
+     * @return String representation of the severity (INFO, WARNING, ERROR, CRITICAL, UNKNOWN)
+     * @note This helper function is used for displaying severity in a human-readable format
+     */
+    std::string severityToString(fan_control_system::ProtoAlarmSeverity severity);
 
     // Service connections
     std::shared_ptr<grpc::ChannelInterface> mcu_channel_;      ///< gRPC channel for MCU Simulator service

@@ -51,6 +51,8 @@ message MCUStatus {
   bool is_online = 2;
   int32 active_sensors = 3;
   repeated SensorStatus sensors = 4;
+  string last_update_time = 5;
+  int32 publish_interval = 6;
 }
 
 message SensorStatus {

@@ -73,8 +73,11 @@ run_container() {
         # Ensure LD_LIBRARY_PATH is set in bash profile for interactive sessions
         echo 'export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH' >> ~/.bashrc
         echo 'export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH' >> ~/.profile
-        
+        sudo apt update && sudo apt install -y lnav
+        mkdir -p ~/.lnav/formats/default
+        cp /app/lnav/fan_control_system.json ~/.lnav/formats/default/fan_control_system.json
         cd /app &&
+        sudo rm -rf /app/build &&
         sudo mkdir -p /etc/fan_control_system &&
         sudo mkdir -p /var/log/fan_control_system &&
         sudo chmod 777 /var/log/fan_control_system &&

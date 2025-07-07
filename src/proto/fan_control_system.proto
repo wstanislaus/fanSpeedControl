@@ -192,8 +192,10 @@ message ProtoAlarmHistoryEntry {
   string alarm_name = 1;
   string message = 2;
   ProtoAlarmSeverity severity = 3;
-  string timestamp = 4;
-  bool was_acknowledged = 5;
+  string first_timestamp = 4;
+  string latest_timestamp = 5;
+  bool was_acknowledged = 6;
+  int32 occurrence_count = 7;
 }
 
 message AlarmConfigRequest {
@@ -248,6 +250,7 @@ message ProtoAlarmStatistics {
   map<string, int32> severity_counts = 5;  // Count by severity
   string last_occurrence = 6;
   string first_occurrence = 7;
+  int32 total_occurrences = 8;  // Total number of times alarms were raised
 }
 
 // ============================================================================

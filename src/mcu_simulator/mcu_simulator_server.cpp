@@ -92,6 +92,8 @@ grpc::Status MCUSimulatorServiceImpl::GetMCUStatus(grpc::ServerContext* context,
                 mcu_status->set_mcu_name(mcu->getName());
                 mcu_status->set_is_online(!mcu->isFaulty());
                 mcu_status->set_active_sensors(mcu->isFaulty() ? 0 : mcu->getActiveSensorCount());
+                mcu_status->set_last_update_time(mcu->getLastUpdateTime());
+                mcu_status->set_publish_interval(mcu->getCurrentPublishInterval());
 
                 // Add sensor status for all sensors, but mark them as inactive if MCU is faulty
                 for (const auto& sensor : mcu->getSensors()) {
@@ -116,6 +118,8 @@ grpc::Status MCUSimulatorServiceImpl::GetMCUStatus(grpc::ServerContext* context,
             mcu_status->set_mcu_name((*it)->getName());
             mcu_status->set_is_online(!(*it)->isFaulty());
             mcu_status->set_active_sensors((*it)->isFaulty() ? 0 : (*it)->getActiveSensorCount());
+            mcu_status->set_last_update_time((*it)->getLastUpdateTime());
+            mcu_status->set_publish_interval((*it)->getCurrentPublishInterval());
 
             // Add sensor status for all sensors, but mark them as inactive if MCU is faulty
             for (const auto& sensor : (*it)->getSensors()) {

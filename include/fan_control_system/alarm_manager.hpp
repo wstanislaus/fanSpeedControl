@@ -54,10 +54,12 @@ struct AlarmEntry {
     std::string name;                    ///< Name of the alarm
     std::string message;                 ///< Alarm message
     AlarmSeverity severity;              ///< Severity level
-    std::string timestamp;               ///< Timestamp when alarm was raised
+    std::string first_timestamp;         ///< Timestamp when alarm was first raised
+    std::string latest_timestamp;        ///< Timestamp when alarm was last raised
     bool is_active;                      ///< Whether alarm is currently active
     bool acknowledged;                   ///< Whether alarm has been acknowledged
     std::vector<std::string> actions_taken; ///< Actions that were executed
+    int occurrence_count;                ///< Number of times this alarm has been raised
 };
 
 /**
@@ -72,6 +74,7 @@ struct AlarmStatistics {
     std::map<std::string, int32_t> severity_counts;
     std::string last_occurrence;
     std::string first_occurrence;
+    int32_t total_occurrences;           ///< Total number of times alarms were raised
 };
 
 /**

@@ -227,7 +227,7 @@ bool MCU::setSimulationParams(int sensor_id, double start_temp, double end_temp,
  * @param tp The timestamp to format
  * @return Formatted timestamp string
  */
-std::string MCU::formatTimestamp(const std::chrono::system_clock::time_point& tp) {
+std::string MCU::formatTimestamp(const std::chrono::system_clock::time_point& tp) const {
     return common::utils::formatTimestamp(tp);
 }
 
@@ -271,7 +271,7 @@ bool MCU::checkErraticReadings(const std::deque<float>& readings) {
  * @param temperature Current temperature reading
  * @return Time interval until next publish
  */
-std::chrono::seconds MCU::calculatePublishInterval(float temperature) {
+std::chrono::seconds MCU::calculatePublishInterval(float temperature) const {
     if (temperature < temp_settings_.bad_threshold) {
         // Use the first interval for bad readings
         return std::chrono::seconds(temp_settings_.publish_intervals[0].interval_seconds);
@@ -339,11 +339,11 @@ void MCU::readAndPublishTemperatures() {
             if (!sensors_[i]->getNoisy()) {
                 status = "Bad";
             }
-            logger_->error("Sensor " + std::to_string(i + 1) + " temperature below threshold: " + 
-                std::to_string(temp));
+            std::ostringstream temp_stream;
+            temp_stream << std::fixed << std::setprecision(2) << temp;
+            logger_->error("Sensor " + std::to_string(i + 1) + " temperature below threshold: " + temp_stream.str());
             alarm_->raise(common::AlarmSeverity::CRITICAL, 
-                "MCU " + name_ + " Sensor " + std::to_string(i + 1) + " temperature below threshold: " + 
-                std::to_string(temp));
+                "MCU " + name_ + " Sensor " + std::to_string(i + 1) + " temperature below threshold: " + temp_stream.str());
             should_publish = true;
             sensors_[i]->raiseAlarm();
         }
@@ -404,7 +404,7 @@ void MCU::readAndPublishTemperatures() {
 bool MCU::getSensorTemperature(const std::string& sensor_id, double& temperature) {
     try {
         int id = std::stoi(sensor_id) - 1;
-        if (id < 0 || id >= sensors_.size() || sensors_[id]->getStatus() == "bad") {
+        if (id < 0 || id >= sensors_.size() || sensors_[id]->getStatus() == "Bad") {
             return false;
         }
         temperature = sensors_[id]->readTemperature();
@@ -416,7 +416,7 @@ bool MCU::getSensorTemperature(const std::string& sensor_id, double& temperature
 
 int MCU::getActiveSensorCount() const {
     return std::count_if(sensors_.begin(), sensors_.end(),
-                        [](const auto& sensor) { return sensor->getStatus() != "bad"; });
+                        [](const auto& sensor) { return sensor->getStatus() != "Bad"; });
 }
 
 void MCU::setFaulty(bool is_faulty) {
@@ -428,6 +428,27 @@ void MCU::setFaulty(bool is_faulty) {
         logger_->info("MCU " + name_ + " set to normal state");
         alarm_->clear("MCU " + name_ + " is back to normal");
     }
+}
+
+std::string MCU::getLastUpdateTime() const {
+    return formatTimestamp(last_read_time_);
+}
+
+int MCU::getCurrentPublishInterval() const {
+    // Calculate current publish interval based on highest temperature
+    float max_temp = -999.9f;
+    for (const auto& readings : sensor_readings_) {
+        if (!readings.empty()) {
+            max_temp = std::max(max_temp, readings.back());
+        }
+    }
+    
+    // If no readings available, return default interval
+    if (max_temp == -999.9f) {
+        return temp_settings_.publish_intervals[0].interval_seconds;
+    }
+    
+    return calculatePublishInterval(max_temp).count();
 }
 
 } // namespace mcu_simulator 

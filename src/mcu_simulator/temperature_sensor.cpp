@@ -56,9 +56,9 @@ float TemperatureSensor::readTemperature() {
     // Update last read time
     last_read_time_ = std::chrono::system_clock::now();
 
-    // If sensor is bad, return a very low temperature
+    // If sensor is bad, return 0.0°C
     if (status_ == "Bad") {
-        return 5.0f;  // 5 degrees Celsius
+        return 0.0f;  // 0 degrees Celsius for bad sensors
     }
 
     if (raising_) {

@@ -302,8 +302,10 @@ grpc::Status FanControlSystemServiceImpl::GetAlarmHistory(grpc::ServerContext* c
         proto_entry->set_alarm_name(entry.name);
         proto_entry->set_message(entry.message);
         proto_entry->set_severity(static_cast<ProtoAlarmSeverity>(entry.severity));
-        proto_entry->set_timestamp(entry.timestamp);
+        proto_entry->set_first_timestamp(entry.first_timestamp);
+        proto_entry->set_latest_timestamp(entry.latest_timestamp);
         proto_entry->set_was_acknowledged(entry.acknowledged);
+        proto_entry->set_occurrence_count(entry.occurrence_count);
     }
     
     response->set_total_entries(alarm_history.size());
@@ -387,6 +389,7 @@ grpc::Status FanControlSystemServiceImpl::GetAlarmStatistics(grpc::ServerContext
         proto_stat->set_acknowledged_count(stat.acknowledged_count);
         proto_stat->set_last_occurrence(stat.last_occurrence);
         proto_stat->set_first_occurrence(stat.first_occurrence);
+        proto_stat->set_total_occurrences(stat.total_occurrences);
         
         for (const auto& severity_pair : stat.severity_counts) {
             proto_stat->mutable_severity_counts()->operator[](severity_pair.first) = severity_pair.second;

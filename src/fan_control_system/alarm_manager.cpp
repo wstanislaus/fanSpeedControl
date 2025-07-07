@@ -158,9 +158,9 @@ std::vector<AlarmStatistics> AlarmManager::get_alarm_statistics(const std::strin
     auto window_duration = std::chrono::hours(time_window_hours);
     
     for (const auto& entry : alarm_history_) {
-        // Parse timestamp and check if within time window
+        // Parse latest timestamp and check if within time window
         std::tm tm = {};
-        std::istringstream ss(entry.timestamp);
+        std::istringstream ss(entry.latest_timestamp);
         ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
         auto entry_time = std::chrono::system_clock::from_time_t(std::mktime(&tm));
         
@@ -175,6 +175,7 @@ std::vector<AlarmStatistics> AlarmManager::get_alarm_statistics(const std::strin
         auto& stats = stats_map[entry.name];
         stats.alarm_name = entry.name;
         stats.total_count++;
+        stats.total_occurrences += entry.occurrence_count;
         
         if (entry.is_active) {
             stats.active_count++;
@@ -187,12 +188,12 @@ std::vector<AlarmStatistics> AlarmManager::get_alarm_statistics(const std::strin
         std::string severity_str = severity_to_string(entry.severity);
         stats.severity_counts[severity_str]++;
         
-        if (stats.last_occurrence.empty() || entry.timestamp > stats.last_occurrence) {
-            stats.last_occurrence = entry.timestamp;
+        if (stats.last_occurrence.empty() || entry.latest_timestamp > stats.last_occurrence) {
+            stats.last_occurrence = entry.latest_timestamp;
         }
         
-        if (stats.first_occurrence.empty() || entry.timestamp < stats.first_occurrence) {
-            stats.first_occurrence = entry.timestamp;
+        if (stats.first_occurrence.empty() || entry.first_timestamp < stats.first_occurrence) {
+            stats.first_occurrence = entry.first_timestamp;
         }
     }
     
@@ -335,9 +336,12 @@ void AlarmManager::process_alarm(const std::string& alarm_source, AlarmSeverity 
     entry.severity = severity;
     entry.is_active = true;
     entry.acknowledged = false;
+    entry.occurrence_count = 1;
     
     // Generate timestamp
-    entry.timestamp = common::utils::getCurrentTimestamp();
+    std::string current_timestamp = common::utils::getCurrentTimestamp();
+    entry.first_timestamp = current_timestamp;
+    entry.latest_timestamp = current_timestamp;
 
     // Add to runtime database
     add_alarm_entry(entry);
@@ -385,17 +389,42 @@ void AlarmManager::execute_severity_actions(AlarmSeverity severity, const std::s
 /**
  * @brief Adds an alarm entry to the runtime database
  * 
+ * If the same alarm already exists, updates the existing entry with the latest timestamp
+ * and increments the occurrence count instead of creating a new entry.
+ * 
  * @param entry Alarm entry to add
  */
 void AlarmManager::add_alarm_entry(const AlarmEntry& entry) {
     std::lock_guard<std::mutex> lock(history_mutex_);
     
+    // Check if this alarm already exists in the history
+    for (auto& existing_entry : alarm_history_) {
+        if (existing_entry.name == entry.name && existing_entry.severity == entry.severity) {
+            // Update existing alarm entry
+            existing_entry.latest_timestamp = entry.latest_timestamp;
+            existing_entry.is_active = entry.is_active;
+            existing_entry.occurrence_count++;
+            
+            // Update message if it's different
+            if (existing_entry.message != entry.message) {
+                existing_entry.message = entry.message;
+            }
+            
+            logger_->info("Updated existing alarm: " + entry.name + " (occurrence #" + 
+                         std::to_string(existing_entry.occurrence_count) + ")");
+            return;
+        }
+    }
+    
+    // If alarm doesn't exist, add as new entry
     alarm_history_.push_back(entry);
     
     // Maintain maximum history size
     while (alarm_history_.size() > static_cast<size_t>(max_history_entries_)) {
         alarm_history_.pop_front();
     }
+    
+    logger_->info("Added new alarm: " + entry.name);
 }
 
 /**

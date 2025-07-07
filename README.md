@@ -229,7 +229,7 @@ Available commands:
   help  - Show this help message
   exit  - Return to main menu
   quit  - Exit the application
-  get_temp <mcu_name> <sensor_id>  - Get temperature from a specific sensor
+  get_temp [mcu_name]  - Get temperatures from all MCUs or a specific MCU
   get_mcu_status [mcu_name]  - Get status of all MCUs or a specific MCU
   set_sim_params <mcu_name> <sensor_id> <start_temp> <end_temp> <step_size>  - Set simulation parameters
   set_mcu_fault <mcu_name> <is_faulty>  - Set MCU fault state (0=normal, 1=faulty)
@@ -239,15 +239,33 @@ Available commands:
 
 **Temperature Operations:**
 ```bash
-# Get temperature from specific sensor
-mcu> get_temp MCU001 1
-Temperature: 43.3°C
+# Get temperatures from all MCUs and all sensors
+mcu> get_temp
+MCU001:
+    Sensor1: 43.3°C (Good)
+    Sensor2: 46.6°C (Good)
+    Sensor3: 48.7°C (Good)
 
-mcu> get_temp MCU001 2
-Temperature: 46.6°C
+MCU002:
+    Sensor1: 42.1°C (Good)
+    Sensor2: 44.2°C (Good)
 
-mcu> get_temp MCU001 3
-Temperature: 48.7°C
+MCU003:
+    Sensor1: 45.5°C (Good)
+
+# Get temperatures from a specific MCU
+mcu> get_temp MCU001
+MCU001:
+    Sensor1: 43.3°C (Good)
+    Sensor2: 46.6°C (Good)
+    Sensor3: 48.7°C (Good)
+
+# Example with faulty sensor
+mcu> get_temp MCU001
+MCU001:
+    Sensor1: 0.0°C (Bad) - Faulty sensor
+    Sensor2: 46.6°C (Good)
+    Sensor3: 48.7°C (Good)
 ```
 
 **MCU Status Operations:**

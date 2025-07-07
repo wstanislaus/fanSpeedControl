@@ -111,7 +111,7 @@ public:
      * @param tp The timestamp to format
      * @return Formatted timestamp string
      */
-    std::string formatTimestamp(const std::chrono::system_clock::time_point& tp);
+    std::string formatTimestamp(const std::chrono::system_clock::time_point& tp) const;
 
     /**
      * @brief Gets the temperature from a specific sensor
@@ -160,6 +160,18 @@ public:
      */
     bool setSimulationParams(int sensor_id, double start_temp, double end_temp, double step_size);
 
+    /**
+     * @brief Gets the last update time as a formatted string
+     * @return Formatted timestamp string of the last update
+     */
+    std::string getLastUpdateTime() const;
+
+    /**
+     * @brief Gets the current publish interval in seconds
+     * @return Current publish interval in seconds
+     */
+    int getCurrentPublishInterval() const;
+
 private:
     /**
      * @brief Reads temperatures from all sensors and publishes them
@@ -185,7 +197,7 @@ private:
      * @param temperature Current temperature reading
      * @return Time interval until next publish
      */
-    std::chrono::seconds calculatePublishInterval(float temperature);
+    std::chrono::seconds calculatePublishInterval(float temperature) const;
 
     /**
      * @brief Generates an alarm if the sensors are bad or noisy, if already raised, clear the alarm

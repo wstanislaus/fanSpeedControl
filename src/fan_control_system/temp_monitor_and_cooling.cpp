@@ -145,17 +145,17 @@ std::deque<TemperatureReading> TempMonitorAndCooling::get_temperature_history(
         return {};
     }
 
-    // Create a list for the max readings specified and return it
+    // Create a list for the max readings specified and return the latest readings
     std::deque<TemperatureReading> history; 
-    // Check if the size of the history is greater than the max readings, if so, return the until max readings, otherwise, return until available
+    // Check if the size of the history is greater than the max readings, if so, return the latest max_readings, otherwise, return all available
     if (sensor_it->second.readings.size() <= max_readings) {
         return sensor_it->second.readings;
     }
-    for (const auto& reading : sensor_it->second.readings) {
-        history.push_back(reading);
-        if (history.size() >= max_readings) {
-            break;
-        }
+    
+    // Return the latest max_readings by starting from the end
+    auto start_it = sensor_it->second.readings.end() - max_readings;
+    for (auto it = start_it; it != sensor_it->second.readings.end(); ++it) {
+        history.push_back(*it);
     }
     logger_->debug("Retrieved temperature history for MCU: " + mcu_name + ", Sensor: " + std::to_string(sensor_id) + 
                   ", Readings: " + std::to_string(history.size()));
@@ -431,6 +431,13 @@ void TempMonitorAndCooling::mqtt_message_callback(
             int sensor_id = sensor["SensorID"];
             double temperature = sensor["Value"];
             std::string status = sensor["Status"];
+            
+            // Skip sensors with bad status
+            if (status != "Good") {
+                monitor->logger_->debug("Skipping sensor " + std::to_string(sensor_id) + " with bad status: " + status);
+                continue;
+            }
+            
             monitor->process_temperature_reading(mcu_name, sensor_id, temperature, status);
         }
     } catch (const std::exception& e) {

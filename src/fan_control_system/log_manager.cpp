@@ -23,7 +23,7 @@ LogManager::LogManager(const YAML::Node& config, const common::MQTTClient::Setti
     : config_(config), mqtt_settings_(mqtt_settings), current_log_size_(0) {
     log_file_path_ = config_["Logging"]["FilePath"].as<std::string>();
     log_file_base_name_ = config_["Logging"]["FileName"].as<std::string>();
-    max_log_size_bytes_ = config_["Logging"]["MaxFileSizeMB"].as<size_t>() * 1024 * 1024;
+    max_log_size_bytes_ = static_cast<size_t>(config_["Logging"]["MaxFileSizeMB"].as<double>() * 1024 * 1024);
     max_log_files_ = config_["Logging"]["MaxFiles"].as<size_t>();
     name_ = "LogManager";
 }
@@ -185,11 +185,13 @@ bool LogManager::rotate_log_file() {
         // Close current log file
         log_file_.close();
 
+        fs::path full_path = fs::path(log_file_path_) / log_file_base_name_;
+
         // Rotate existing log files
         for (size_t i = max_log_files_ - 1; i > 0; --i) {
-            fs::path old_path = fs::path(log_file_path_).parent_path() / 
+            fs::path old_path = fs::path(log_file_path_) / 
                               (log_file_base_name_ + "_" + std::to_string(i) + ".log");
-            fs::path new_path = fs::path(log_file_path_).parent_path() / 
+            fs::path new_path = fs::path(log_file_path_) / 
                               (log_file_base_name_ + "_" + std::to_string(i + 1) + ".log");
             
             if (fs::exists(old_path)) {
@@ -202,12 +204,12 @@ bool LogManager::rotate_log_file() {
         }
 
         // Rename current log file
-        fs::rename(log_file_path_, 
-                  fs::path(log_file_path_).parent_path() / 
+        fs::rename(full_path, 
+                  fs::path(log_file_path_)/ 
                   (log_file_base_name_ + "_1.log"));
 
         // Open new log file
-        log_file_.open(log_file_path_, std::ios::app);
+        log_file_.open(full_path, std::ios::app);
         if (!log_file_.is_open()) {
             return false;
         }
@@ -240,7 +242,14 @@ void LogManager::write_log_entry(const LogEntry& entry) {
     log_file_ << log_line;
     log_file_.flush();
 
-    current_log_size_ += log_line.size();
+    // Get the actual file size from the filesystem
+    fs::path full_path = fs::path(log_file_path_) / log_file_base_name_;
+    if (fs::exists(full_path)) {
+        current_log_size_ = fs::file_size(full_path);
+    } else {
+        current_log_size_ = 0;
+    }
+    
     if (current_log_size_ >= max_log_size_bytes_) {
         rotate_log_file();
     }
