@@ -455,7 +455,7 @@ The system automatically detects sensor recovery and clears alarms. This demonst
 
 #### Step 1: Rapid Temperature Increase
 ```bash
-mcu> set_sim_params 72.0 80.0 0.5
+mcu> set_sim_params 70.0 80.0 0.5
 ```
 
 **Expected Output**:

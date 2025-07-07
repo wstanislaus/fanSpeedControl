@@ -45,75 +45,90 @@ src/
 
 **Core Classes**:
 ```cpp
-// MCU base class
+// MCU base class - manages multiple temperature sensors and MQTT communication
 class MCU {
 private:
-    std::string name;
-    std::vector<TemperatureSensor> sensors;
-    MQTTClient& mqttClient;
-    Config& config;
+    std::string name_;                                          // Name of the MCU
+    std::vector<std::unique_ptr<TemperatureSensor>> sensors_;   // Vector of temperature sensors
+    std::shared_ptr<common::MQTTClient> mqtt_client_;           // MQTT client for communication
+    bool running_;                                              // Flag indicating if the MCU is running
+    bool is_faulty_ = false;                                    // Flag indicating if the MCU is in a faulty state
     
 public:
-    void simulateTemperature();
-    void publishReadings();
-    void injectFault(int sensorId, bool faulty);
-    MCUStatus getStatus();
+    // Starts the temperature reading and publishing loop
+    void start();
+    
+    // Stops the temperature reading and publishing loop
+    void stop();
+    
+    // Makes a specific sensor report bad readings (for testing)
+    bool makeSensorBad(int sensor_id, bool is_bad);
+    
+    // Makes a specific sensor report noisy readings (for testing)
+    bool makeSensorNoisy(int sensor_id, bool is_noisy);
+    
+    // Sets the simulation parameters for a specific sensor
+    bool setSimulationParams(int sensor_id, double start_temp, double end_temp, double step_size);
+    
+private:
+    // Reads temperatures from all sensors and publishes them
+    void readAndPublishTemperatures();
+    
+    // Calculates the next publish interval based on current temperature
+    std::chrono::seconds calculatePublishInterval(float temperature) const;
 };
 
-// Temperature sensor simulation
+// Temperature sensor simulation - represents individual temperature sensors
 class TemperatureSensor {
 private:
-    int sensorId;
-    float currentTemp;
-    float targetTemp;
-    float stepSize;
-    std::string status; // "Good", "Bad"
+    int id_;                                                    // Unique identifier for the sensor
+    std::string name_;                                          // Name of the sensor
+    std::string status_;                                        // Current status of the sensor ("Good" or "Bad")
+    bool is_noisy_;                                             // Whether the sensor is in noisy mode
+    float start_temp_;                                          // Start temperature for simulation (°C)
+    float end_temp_;                                            // End temperature for simulation (°C)
+    float step_size_;                                           // Step size for simulation (°C)
     
 public:
+    // Reads the current temperature from the sensor
     float readTemperature();
-    void setSimulationParams(float target, float step);
-    void setFault(bool faulty);
-    std::string getStatus();
+    
+    // Sets the status of the sensor (good/bad)
+    void setStatus(bool is_bad);
+    
+    // Sets whether the sensor should report noisy readings
+    void setNoisy(bool noisy);
+    
+    // Sets the simulation parameters for temperature generation
+    void setSimulationParams(const double start_temp, const double end_temp, const double step_size);
 };
 ```
 
 **Key Features**:
 1. **Dynamic Temperature Simulation**
    ```cpp
-   void MCU::simulateTemperature() {
-       for (auto& sensor : sensors) {
-           float current = sensor.readTemperature();
-           float target = config.getSimulatorTargetTemp();
-           float step = config.getSimulatorStepSize();
-           
-           if (current < target) {
-               sensor.setSimulationParams(target, step);
-           }
-       }
+   void MCU::readAndPublishTemperatures() {
+       // Reads temperatures from all sensors and publishes via MQTT
+       // Includes adaptive publish intervals based on temperature
+       // Handles erratic reading detection and alarm conditions
    }
    ```
 
 2. **Adaptive Publish Intervals**
    ```cpp
-   int MCU::getPublishInterval() {
-       float maxTemp = getMaxTemperature();
-       
-       if (maxTemp < 25.0) return 10;      // 10 seconds
-       else if (maxTemp < 40.0) return 7;  // 7 seconds
-       else if (maxTemp < 50.0) return 5;  // 5 seconds
-       else if (maxTemp < 60.0) return 3;  // 3 seconds
-       else if (maxTemp < 70.0) return 2;  // 2 seconds
-       else return 1;                      // 1 second
+   std::chrono::seconds MCU::calculatePublishInterval(float temperature) const {
+       // Returns publish interval based on temperature thresholds
+       // Higher temperatures = more frequent publishing
+       // Lower temperatures = less frequent publishing
    }
    ```
 
 3. **Fault Injection Capabilities**
    ```cpp
-   void MCU::injectFault(int sensorId, bool faulty) {
-       if (sensorId < sensors.size()) {
-           sensors[sensorId].setFault(faulty);
-           publishAlarm(sensorId, faulty);
-       }
+   bool MCU::makeSensorBad(int sensor_id, bool is_bad) {
+       // Sets a specific sensor to bad/good state for testing
+       // Triggers alarm conditions when sensor is bad
+       // Used for testing fault detection and alarm systems
    }
    ```
 
@@ -121,53 +136,73 @@ public:
 
 **Core Classes**:
 ```cpp
-// Main fan control system
+// Main fan control system - coordinates all components
 class FanControlSystem {
 private:
-    std::vector<Fan> fans;
-    TempMonitorAndCooling tempMonitor;
-    AlarmManager alarmManager;
-    LogManager logManager;
-    MQTTClient& mqttClient;
+    std::shared_ptr<fan_control_system::FanSimulator> fan_simulator_;      // Fan simulator for controlling fan speeds
+    std::shared_ptr<fan_control_system::TempMonitorAndCooling> temp_monitor_; // Temperature monitoring and cooling control
+    std::shared_ptr<fan_control_system::AlarmManager> alarm_manager_;      // System-wide alarm management
+    std::thread main_thread_;                                              // Main system thread
+    std::atomic<bool> running_{false};                                     // System running state
     
 public:
-    void start();
-    void processTemperatureUpdates();
-    void controlFans();
-    void handleAlarms();
+    // Starts the fan control system
+    bool start();
+    
+    // Stops the fan control system
+    void stop();
+    
+    // Checks if the system is currently running
+    bool is_running() const;
+    
+private:
+    // Main thread function that coordinates system operations
+    void main_thread_function();
 };
 
-// Temperature monitoring and cooling logic
+// Temperature monitoring and cooling logic - core control algorithm
 class TempMonitorAndCooling {
 private:
-    std::deque<TemperatureReading> history;
-    float minTemp, maxTemp, minDutyCycle, maxDutyCycle;
+    std::map<std::string, std::map<int, TemperatureHistory>> temperature_history_;  // Temperature history for each sensor
+    std::shared_ptr<FanSimulator> fan_simulator_;          // Fan simulator for speed control
+    std::shared_ptr<common::MQTTClient> mqtt_client_;      // MQTT client for communication
+    double temp_threshold_low_{25.0};                     // Below this, fans run at 20%
+    double temp_threshold_high_{75.0};                    // Above this, fans run at 100%
+    int fan_speed_min_{20};                              // Minimum fan speed percentage
+    int fan_speed_max_{100};                             // Maximum fan speed percentage
     
 public:
-    float calculateDutyCycle(float maxTemp);
-    void updateTemperatureHistory(const TemperatureReading& reading);
-    CoolingStatus getStatus();
+    // Starts the temperature monitor
+    bool start();
+    
+    // Gets the current temperature for a specific MCU and sensor
+    double get_temperature(const std::string& mcu_name, int sensor_id) const;
+    
+    // Sets the temperature thresholds
+    void set_thresholds(double temp_threshold_low, double temp_threshold_high, int fan_speed_min, int fan_speed_max);
+    
+    // Gets the cooling status
+    CoolingStatus get_cooling_status() const;
+    
+private:
+    // Processes a new temperature reading
+    void process_temperature_reading(const std::string& mcu_name, int sensor_id, double temperature, const std::string& status);
+    
+    // Calculates required fan speed based on current temperatures
+    CoolingStatus calculate_fan_speed() const;
+    
+    // Updates the fan speed
+    void update_fan_speed();
 };
 ```
 
 **Control Algorithm Implementation**:
 ```cpp
-float TempMonitorAndCooling::calculateDutyCycle(float maxTemp) {
-    // Core algorithm: linear interpolation
-    if (maxTemp <= minTemp) {
-        return minDutyCycle;  // 20% at 25°C or below
-    }
-    
-    if (maxTemp >= maxTemp) {
-        return maxDutyCycle;  // 100% at 75°C or above
-    }
-    
-    // Linear interpolation between 25°C and 75°C
-    float tempRange = maxTemp - minTemp;
-    float dutyRange = maxDutyCycle - minDutyCycle;
-    float slope = dutyRange / tempRange;
-    
-    return minDutyCycle + slope * (maxTemp - minTemp);
+CoolingStatus TempMonitorAndCooling::calculate_fan_speed() const {
+    // Core algorithm: linear interpolation based on temperature
+    // Calculates fan speed between min and max thresholds
+    // Returns cooling status with average temperature and fan speed
+    // Handles multiple sensor readings and temperature history
 }
 ```
 
@@ -175,30 +210,53 @@ float TempMonitorAndCooling::calculateDutyCycle(float maxTemp) {
 ```cpp
 class Fan {
 private:
-    std::string name;
-    std::string model;
-    int pwmCount;
-    float dutyCycle;
-    FanModel& modelConfig;
+    std::string name_;                                          // Name of the fan
+    std::string model_name_;                                    // Model name of the fan
+    uint8_t i2c_address_;                                       // I2C address of the fan controller
+    uint8_t pwm_reg_;                                          // PWM register address
+    std::string status_;                                        // Current status of the fan
+    int current_pwm_count_;                                    // Current pwm count based on the duty cycle
+    int current_duty_cycle_;                                    // Current duty cycle based on the pwm count
+    int pwm_min_;                                                // PWM minimum value
+    int pwm_max_;                                                // PWM maximum value
+    int duty_cycle_min_;                                         // Duty cycle minimum value
+    int duty_cycle_max_;                                         // Duty cycle maximum value
     
 public:
-    void setDutyCycle(float dutyCycle);
-    void setPWMCount(int pwmCount);
-    float getNoiseLevel();
-    FanStatus getStatus();
+    // Initializes the fan and its components
+    bool initialize();
+    
+    // Gets the current duty cycle of the fan
+    int getDutyCycle() const;
+    
+    // Gets the current PWM count of the fan
+    int getPWMCount() const;
+    
+    // Sets the duty cycle of the fan
+    bool setPwmCount(int duty_cycle, int pwm_count);
+    
+    // Makes the fan report bad status (for testing)
+    bool makeBad();
+    
+    // Makes the fan report good status (for testing)
+    bool makeGood();
+    
+private:
+    // Reads the current pwm count from the I2C register
+    int readPwmCount();
+    
+    // Writes the pwm count to the I2C register
+    bool writePwmCount(int pwm_count);
+    
+    // Publishes fan status via MQTT
+    void publishStatus();
 };
 
-void Fan::setDutyCycle(float newDutyCycle) {
-    dutyCycle = std::clamp(newDutyCycle, 
-                          modelConfig.getMinDutyCycle(), 
-                          modelConfig.getMaxDutyCycle());
-    
-    // Convert duty cycle to PWM counts
-    int newPWM = modelConfig.dutyCycleToPWM(dutyCycle);
-    setPWMCount(newPWM);
-    
-    // Publish status update
-    publishStatus();
+void Fan::setPwmCount(int duty_cycle, int pwm_count) {
+    // Sets duty cycle and PWM count with bounds checking
+    // Converts duty cycle to PWM counts based on fan model
+    // Updates fan status and publishes via MQTT
+    // Handles error conditions and logging
 }
 ```
 
@@ -208,15 +266,22 @@ void Fan::setDutyCycle(float newDutyCycle) {
 ```cpp
 class MQTTClient {
 private:
-    mosqpp::mosquittopp client;
-    std::string broker;
-    int port;
+    std::string client_id_;                                     // Unique identifier for this MQTT client
+    Settings settings_;                                         // MQTT client settings
+    mosquitto* client_;                                         // Pointer to mosquitto client instance
     
 public:
-    void connect();
-    void publish(const std::string& topic, const std::string& message);
-    void subscribe(const std::string& topic);
-    void on_message(const mosquitto_message* message);
+    // Connects to the MQTT broker
+    bool connect();
+    
+    // Publishes a message to an MQTT topic
+    bool publish(const std::string& topic, const std::string& payload);
+    
+    // Subscribes to an MQTT topic
+    bool subscribe(const std::string& topic, int qos);
+    
+    // Disconnects from the MQTT broker
+    void disconnect();
 };
 ```
 
@@ -224,15 +289,28 @@ public:
 ```cpp
 class Config {
 private:
-    YAML::Node config;
+    YAML::Node config_;                                         // Loaded configuration data
+    bool loaded_ = false;                                       // Whether configuration has been loaded
     
 public:
-    template<typename T>
-    T get(const std::string& key, const T& defaultValue = T{});
+    // Gets the singleton instance of the Config class
+    static Config& getInstance();
     
-    std::vector<MCUConfig> getMCUConfigs();
-    std::vector<FanConfig> getFanConfigs();
-    AlarmConfig getAlarmConfig();
+    // Loads configuration from a YAML file
+    bool load(const std::string& config_file);
+    
+    // Gets the MQTT settings from the configuration
+    MQTTClient::Settings getMQTTSettings() const;
+    
+    // Gets the configuration
+    YAML::Node getConfig() const;
+    
+private:
+    // Private constructor to enforce singleton pattern
+    Config() = default;
+    
+    // Deleted copy constructor to prevent copying
+    Config(const Config&) = delete;
 };
 ```
 
@@ -245,23 +323,23 @@ public:
 {
   "MCU": "MCU001",
   "NoOfTempSensors": 3,
-  "MsgTimestamp": "2025-01-15 14:30:25",
+  "MsgTimestamp": "2025-07-02 14:30:25",
   "SensorData": [
     {
       "SensorID": 1,
-      "ReadAt": "2025-01-15 14:30:25",
+      "ReadAt": "2025-07-02 14:30:25",
       "Value": 43.3,
       "Status": "Good"
     },
     {
       "SensorID": 2,
-      "ReadAt": "2025-01-15 14:30:25",
+      "ReadAt": "2025-07-02 14:30:25",
       "Value": 46.6,
       "Status": "Good"
     },
     {
       "SensorID": 3,
-      "ReadAt": "2025-01-15 14:30:25",
+      "ReadAt": "2025-07-02 14:30:25",
       "Value": 48.7,
       "Status": "Good"
     }
@@ -272,12 +350,11 @@ public:
 **Alarm Messages**:
 ```json
 {
-  "timestamp": "2025-01-15 14:30:25",
-  "severity": 2,
-  "source": "MCU001",
-  "message": "Temperature sensor failure detected",
-  "state": "raised",
-  "actions": ["LogEvent", "SendNotification"]
+    "message":"MCU MCU001 set to faulty state",
+    "severity":2,
+    "source":"MCU001",
+    "state":"raised",
+    "timestamp":"2025-07-02 14:35:45"
 }
 ```
 
